@@ -22,6 +22,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <ToastProvider>
+      {/* Solid strip behind the iPhone status bar so scrolled content never shows under the clock. */}
+      <div aria-hidden className="fixed inset-x-0 top-0 z-40 h-[env(safe-area-inset-top)] bg-bg" />
       <div className="pt-safe mx-auto min-h-dvh max-w-md px-4 pb-28">{children}</div>
       <BottomNav />
     </ToastProvider>
