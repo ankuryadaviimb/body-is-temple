@@ -3,7 +3,9 @@
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useDayEvents, useSettings, useSnapshot, useSyncState, useToday } from "@/lib/client/hooks";
+import { apiSend } from "@/lib/client/api";
 import { dayEvents, logEvent, updateEvent } from "@/lib/client/log";
+import { refreshFromServer } from "@/lib/client/sync";
 import { ofKind } from "@/lib/domain/day";
 import { mealAnalysisOf } from "@/lib/domain/events";
 import { buildMorningCard, LADDER } from "@/lib/domain/ladder";
@@ -38,6 +40,7 @@ export function TodayScreen() {
   const { showFeedback, logged } = useToast();
   const [moreOpen, setMoreOpen] = useState(false);
   const [gasOpen, setGasOpen] = useState(false);
+  const [teaOpen, setTeaOpen] = useState(false);
   const [moodFor, setMoodFor] = useState<string | null>(null);
 
   const ladderIndex = snapshot?.ladder.index ?? 0;
@@ -93,12 +96,12 @@ export function TodayScreen() {
   const nowMinutes = localParts(new Date(), settings.tz).minutes;
   const nightTime = nowMinutes >= 21 * 60 || nowMinutes < settings.day_start_hour * 60;
 
-  async function quickLog(kind: "water" | "tea" | "isabgol" | "amla" | "walk") {
+  async function quickLog(kind: "water" | "tea" | "isabgol" | "amla" | "walk", teaMl = settings.tea_ml) {
     const result =
       kind === "water"
         ? await logEvent("water", { ml: 250 })
         : kind === "tea"
-          ? await logEvent("drink", { type: "tea", ml: 150 })
+          ? await logEvent("drink", { type: "tea", ml: teaMl })
           : kind === "amla"
             ? await logEvent("drink", { type: "amla", ml: 30 })
             : kind === "walk"
@@ -107,7 +110,7 @@ export function TodayScreen() {
     const sameKind = (await dayEvents(result.event.logical_day)).filter((e) => e.kind === result.event.kind).length;
     const fallback: Record<typeof kind, string> = {
       water: `Water logged · ${sameKind * 250} ml today`,
-      tea: "Small cup of tea logged.",
+      tea: `Tea logged · ${teaMl} ml`,
       amla: "Amla logged.",
       walk: "10-minute walk logged.",
       isabgol: "Isabgol logged.",
@@ -204,10 +207,20 @@ export function TodayScreen() {
           <DropIcon className="size-7 text-rest" />
           Water +1
         </button>
-        <button type="button" onClick={() => void quickLog("tea")} className="flex h-20 flex-col items-center justify-center gap-1 rounded-3xl bg-surface font-semibold shadow-sm">
-          <CupIcon className="size-7 text-fuel" />
-          Tea (small)
-        </button>
+        <div className="relative">
+          <button type="button" onClick={() => void quickLog("tea")} className="flex h-20 w-full flex-col items-center justify-center gap-1 rounded-3xl bg-surface font-semibold shadow-sm">
+            <CupIcon className="size-7 text-fuel" />
+            Tea · {settings.tea_ml} ml
+          </button>
+          <button
+            type="button"
+            onClick={() => setTeaOpen(true)}
+            aria-label="Choose a different cup size"
+            className="absolute right-2 top-2 rounded-full bg-surface-2 px-2 py-1 text-xs font-medium text-ink-2"
+          >
+            Size
+          </button>
+        </div>
       </section>
 
       <section className="flex flex-wrap gap-2" aria-label="More quick logs">
@@ -243,6 +256,33 @@ export function TodayScreen() {
 
       <MoreSheet open={moreOpen} onClose={() => setMoreOpen(false)} />
       <GasSheet open={gasOpen} onClose={() => setGasOpen(false)} />
+      <Sheet open={teaOpen} title="Which cup?" onClose={() => setTeaOpen(false)}>
+        <p className="mb-3 text-sm text-ink-2">Logs this cup now and makes it your usual, so one tap on Tea logs it next time.</p>
+        <div className="flex flex-col gap-2">
+          {[
+            { ml: 150, label: "Small cup" },
+            { ml: 300, label: "Coffee mug" },
+            { ml: 400, label: "Large mug" },
+          ].map((c) => (
+            <button
+              key={c.ml}
+              type="button"
+              onClick={async () => {
+                setTeaOpen(false);
+                await quickLog("tea", c.ml);
+                if (c.ml !== settings.tea_ml) {
+                  await apiSend("PUT", "/api/settings", { tea_ml: c.ml }).catch(() => undefined);
+                  await refreshFromServer();
+                }
+              }}
+              className={`flex h-14 items-center justify-between rounded-2xl px-4 font-medium ${c.ml === settings.tea_ml ? "bg-brand text-brand-ink" : "bg-surface-2"}`}
+            >
+              <span>{c.label}</span>
+              <span>{c.ml} ml</span>
+            </button>
+          ))}
+        </div>
+      </Sheet>
     </main>
   );
 }

@@ -7,6 +7,8 @@ export const SettingsSchema = z.strictObject({
   tz: z.string().max(64).refine(isValidTimeZone, "Unknown time zone"),
   day_start_hour: z.int().min(2).max(8),
   water_target_ml: z.int().min(500).max(6000),
+  /** Usual tea size, logged by one tap on the Tea tile. */
+  tea_ml: z.int().min(50).max(600),
   /** Starting protein target; the coach tunes it. Null until weight is known. */
   protein_target_g: z.int().min(20).max(300).nullable(),
   steps_target: z.int().min(1000).max(40000).nullable(),
@@ -40,6 +42,7 @@ export const DEFAULT_SETTINGS: Settings = {
   tz: DEFAULT_TZ,
   day_start_hour: DEFAULT_DAY_START_HOUR,
   water_target_ml: 2500,
+  tea_ml: 300,
   protein_target_g: null,
   steps_target: null,
   bedtime_target_min: 24 * 60 + 30,

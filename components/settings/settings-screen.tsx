@@ -91,6 +91,10 @@ function SettingsForm({ initial }: { initial: Settings }) {
           <input inputMode="numeric" className={input} value={form.water_target_ml} onChange={(e) => set("water_target_ml", Number(e.target.value) || 0)} />
         </label>
         <label className="text-sm text-ink-2">
+          Usual tea (ml per cup, logged by one tap)
+          <input inputMode="numeric" className={input} value={form.tea_ml} onChange={(e) => set("tea_ml", Number(e.target.value) || 0)} />
+        </label>
+        <label className="text-sm text-ink-2">
           Bedtime target
           <input
             type="time"
