@@ -8,7 +8,7 @@ import { useToast } from "../toast";
 type Panel = "menu" | "meal_text" | "weight" | "mood" | "stress" | "symptom" | "note" | "workout";
 
 /** Less frequent logs. Every one is a tap or two; text is optional and short. */
-export function MoreSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
+export function MoreSheet({ open, onClose, onEarlier }: { open: boolean; onClose: () => void; onEarlier?: () => void }) {
   const [panel, setPanel] = useState<Panel>("menu");
   const [text, setText] = useState("");
   const [num, setNum] = useState<string>("");
@@ -70,6 +70,11 @@ export function MoreSheet({ open, onClose }: { open: boolean; onClose: () => voi
     <Sheet open={open} title={titles[panel]} onClose={close}>
       {panel === "menu" ? (
         <div className="grid grid-cols-2 gap-2">
+          {onEarlier ? (
+            <button type="button" onClick={onEarlier} className="col-span-2 h-14 rounded-2xl bg-brand/15 font-semibold text-brand">
+              Add an earlier entry (meal, toilet, water, tea...)
+            </button>
+          ) : null}
           {(
             [
               ["meal_text", "Meal by text"],

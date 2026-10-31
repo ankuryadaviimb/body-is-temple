@@ -89,6 +89,8 @@ export const PayloadSchemas = {
   }),
   meal: z.strictObject({
     slot: z.enum(MEAL_SLOTS).optional(),
+    /** True when the person picked the slot, so the AI never changes it. */
+    slot_chosen: z.boolean().optional(),
     media_id: z.uuid().optional(),
     text: shortText.optional(),
   }),

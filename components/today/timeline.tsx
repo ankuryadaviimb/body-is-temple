@@ -7,7 +7,7 @@ import { updateEvent } from "@/lib/client/log";
 import { usePendingDeletes } from "@/lib/client/pending-delete";
 import type { LocalEvent } from "@/lib/client/db";
 import { MEAL_SLOTS, type EventKind } from "@/lib/domain/events";
-import { localParts, localToInstant } from "@/lib/domain/time";
+import { addDays, localParts, localToInstant } from "@/lib/domain/time";
 import { EventIcon } from "../event-visuals";
 import { TrashIcon } from "../icons";
 import { Choice, Sheet } from "../sheet";
@@ -97,12 +97,21 @@ function EditSheet({ event, tz, onClose }: { event: LocalEvent; tz: string; onCl
   const p = localParts(event.occurred_at, tz);
   const { deleteWithUndo } = useToast();
   const [time, setTime] = useState(`${String(p.hour).padStart(2, "0")}:${String(p.minute).padStart(2, "0")}`);
+  const [date, setDate] = useState(p.date);
+  const calendarToday = localParts(new Date(), tz).date;
+  const dayOptions = [...new Set([addDays(calendarToday, -1), calendarToday, p.date])].sort().map((d) => ({
+    value: d,
+    label: d === calendarToday ? "Today" : d === addDays(calendarToday, -1) ? "Yesterday" : new Date(`${d}T12:00:00Z`).toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" }),
+  }));
+  const [hh, mm] = time.split(":").map(Number);
+  const chosenAt = localToInstant(date, hh * 60 + mm, tz);
+  const inFuture = chosenAt.getTime() > new Date().getTime() + 60_000;
   const [slot, setSlot] = useState<string | undefined>(event.payload.slot as string | undefined);
   const [text, setText] = useState<string>(typeof event.payload.text === "string" ? event.payload.text : "");
 
   async function save() {
-    const [h, m] = time.split(":").map(Number);
-    const at = localToInstant(p.date, h * 60 + m, tz).toISOString();
+    if (inFuture) return;
+    const at = chosenAt.toISOString();
     const payload: Record<string, unknown> = {};
     if (event.kind === "meal") {
       if (slot && slot !== event.payload.slot) payload.slot = slot;
@@ -114,9 +123,11 @@ function EditSheet({ event, tz, onClose }: { event: LocalEvent; tz: string; onCl
 
   return (
     <Sheet open title={eventTitle(event)} onClose={onClose}>
+      <Choice label="Day" value={date} onChange={setDate} options={dayOptions} />
       <label className="mb-5 block">
         <span className="mb-2 block text-[13px] font-semibold uppercase tracking-wide text-ink-3">Time</span>
-        <input type="time" value={time} onChange={(e) => setTime(e.target.value)} className="h-12 w-full rounded-2xl bg-surface-2 px-4 text-base" />
+        <input type="time" value={time} onChange={(e) => e.target.value && setTime(e.target.value)} className="h-12 w-full rounded-2xl bg-surface-2 px-4 text-base" />
+        {inFuture ? <span className="mt-2 block text-[13px] text-care">That time has not happened yet. Pick an earlier time or Yesterday.</span> : null}
       </label>
       {event.kind === "meal" ? (
         <>
@@ -149,7 +160,7 @@ function EditSheet({ event, tz, onClose }: { event: LocalEvent; tz: string; onCl
         >
           <TrashIcon className="size-4" /> Delete
         </button>
-        <button type="button" onClick={() => void save()} className="pressable h-12 flex-[2] rounded-2xl bg-brand font-semibold text-brand-ink">
+        <button type="button" disabled={inFuture} onClick={() => void save()} className="pressable h-12 flex-[2] rounded-2xl bg-brand font-semibold text-brand-ink disabled:opacity-50">
           Save
         </button>
       </div>

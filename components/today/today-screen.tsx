@@ -30,6 +30,7 @@ import {
   SpoonIcon,
   SunIcon,
   WalkIcon,
+  PlusIcon,
   SeedsIcon,
   WindIcon,
 } from "../icons";
@@ -38,6 +39,7 @@ import { TriageSheet } from "../coach/triage-sheet";
 import { GasSheet } from "../gas-sheet";
 import { useToast } from "../toast";
 import { AskCard } from "./ask-card";
+import { BackfillSheet } from "./backfill-sheet";
 import { CoachCardView } from "./coach-card";
 import { FuelCard } from "./fuel-card";
 import { MealTile } from "./meal-button";
@@ -94,6 +96,7 @@ export function TodayScreen() {
   const [gasOpen, setGasOpen] = useState(false);
   const [teaOpen, setTeaOpen] = useState(false);
   const [glassOpen, setGlassOpen] = useState(false);
+  const [earlierOpen, setEarlierOpen] = useState(false);
   const [moodFor, setMoodFor] = useState<string | null>(null);
   const [triageOpen, setTriageOpen] = useState(false);
   const openVisit = useOpenVisit();
@@ -388,11 +391,27 @@ export function TodayScreen() {
       ) : null}
 
       <section aria-label="Today's log">
-        <SectionTitle right={events.length ? `${events.length} ${events.length === 1 ? "entry" : "entries"}` : undefined}>Today&apos;s log</SectionTitle>
+        <SectionTitle
+          right={
+            <button type="button" onClick={() => setEarlierOpen(true)} className="pressable -my-1 inline-flex h-8 items-center gap-1 rounded-full bg-brand/15 px-3 text-[13px] font-semibold normal-case tracking-normal text-brand">
+              <PlusIcon className="size-4" /> Earlier entry
+            </button>
+          }
+        >
+          Today&apos;s log
+        </SectionTitle>
         <Timeline events={events} tz={settings.tz} />
       </section>
 
-      <MoreSheet open={moreOpen} onClose={() => setMoreOpen(false)} />
+      <MoreSheet
+        open={moreOpen}
+        onClose={() => setMoreOpen(false)}
+        onEarlier={() => {
+          setMoreOpen(false);
+          setEarlierOpen(true);
+        }}
+      />
+      <BackfillSheet open={earlierOpen} onClose={() => setEarlierOpen(false)} />
       <GasSheet open={gasOpen} onClose={() => setGasOpen(false)} />
       <TriageSheet open={triageOpen} onClose={() => setTriageOpen(false)} />
       <Sheet open={glassOpen} title="Which glass?" onClose={() => setGlassOpen(false)}>

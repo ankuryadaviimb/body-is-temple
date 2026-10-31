@@ -9,8 +9,11 @@ import { clearVisit, startVisit, useOpenVisit } from "@/lib/client/toilet-visit"
 import { ofKind } from "@/lib/domain/day";
 import { payloadOf, type Payload } from "@/lib/domain/events";
 import { BRISTOL_LABELS } from "@/lib/domain/ladder";
+import { defaultWhen, resolveWhen, type WhenValue } from "@/lib/domain/when";
+import { useSettings } from "@/lib/client/hooks";
 import { BreathPacer, SessionHeader, useBreathCycle, useWakeLock } from "../breath-pacer";
 import { ExerciseFigure } from "../exercise-figure";
+import { WhenPicker } from "../when-picker";
 import { ChevronRightIcon, ClockIcon, SeatIcon } from "../icons";
 import { Choice } from "../sheet";
 import { useToast } from "../toast";
@@ -24,11 +27,13 @@ import { useToast } from "../toast";
 
 const CUES = ["Feet up, knees above hips", "Lean forward, back straight", "Loose jaw", "Pee first, no pushing"];
 
+/** Minutes ago; -1 means "pick a day and time". */
 const AGO = [
   { value: 0, label: "Just now" },
   { value: 15, label: "15 min ago" },
   { value: 30, label: "30 min ago" },
   { value: 60, label: "1 hour ago" },
+  { value: -1, label: "Earlier..." },
 ];
 
 const LENGTHS = [
@@ -49,7 +54,7 @@ function mmss(ms: number) {
 
 type Stage = "choose" | "away" | "when" | "sit" | "rate";
 
-export function ToiletSession({ back = false, going = false }: { back?: boolean; going?: boolean }) {
+export function ToiletSession({ back = false, going = false, earlier = false }: { back?: boolean; going?: boolean; earlier?: boolean }) {
   const open = useOpenVisit();
   const started = useRef(false);
   // "Going now" from the Should I go? sheet starts the visit right away.
@@ -59,17 +64,19 @@ export function ToiletSession({ back = false, going = false }: { back?: boolean;
     void startVisit();
   }, [going, open]);
   if (open === undefined) return null;
-  return <Flow key={open?.startedAt ?? "none"} back={back} openStartedAt={open?.startedAt ?? null} />;
+  return <Flow key={open?.startedAt ?? "none"} back={back} earlier={earlier} openStartedAt={open?.startedAt ?? null} />;
 }
 
-function Flow({ back, openStartedAt }: { back: boolean; openStartedAt: string | null }) {
+function Flow({ back, earlier, openStartedAt }: { back: boolean; earlier: boolean; openStartedAt: string | null }) {
   const router = useRouter();
+  const settings = useSettings();
+  const [when, setWhen] = useState<WhenValue>(() => defaultWhen(settings.tz, new Date(), 60));
   const today = useToday();
   const events = useDayEvents(today);
   const { logged } = useToast();
   const resuming = back && openStartedAt !== null;
-  const [stage, setStage] = useState<Stage>(resuming ? "rate" : openStartedAt ? "away" : "choose");
-  const [ago, setAgo] = useState(0);
+  const [stage, setStage] = useState<Stage>(resuming ? "rate" : earlier ? "when" : openStartedAt ? "away" : "choose");
+  const [ago, setAgo] = useState(earlier ? -1 : 0);
   const [length, setLength] = useState(() => (resuming ? nearestLength((Date.now() - new Date(openStartedAt!).getTime()) / 1000) : 210));
   const [sitStartedAt, setSitStartedAt] = useState<number | null>(null);
   const [now, setNow] = useState(() => Date.now());
@@ -122,7 +129,9 @@ function Flow({ back, openStartedAt }: { back: boolean; openStartedAt: string | 
       ? new Date(sitStartedAt)
       : openStartedAt
         ? new Date(openStartedAt)
-        : new Date(Date.now() - ago * 60_000 - length * 1000);
+        : ago < 0
+          ? resolveWhen(when, settings.tz)
+          : new Date(Date.now() - ago * 60_000 - length * 1000);
     const payload: Payload<"toilet"> = {
       duration_s: guided ? Math.round(elapsed / 1000) : length,
       passed,
@@ -225,6 +234,7 @@ function Flow({ back, openStartedAt }: { back: boolean; openStartedAt: string | 
         <SessionHeader title="I just went" />
         <div className="mt-5">
           <Choice label="When?" value={ago} onChange={setAgo} options={AGO} />
+          {ago < 0 ? <WhenPicker value={when} onChange={setWhen} tz={settings.tz} /> : null}
           <Choice label="About how long did you sit?" value={length} onChange={setLength} options={LENGTHS} />
         </div>
         <button type="button" onClick={() => setStage("rate")} className="pressable mt-2 h-14 w-full rounded-2xl bg-brand font-semibold text-brand-ink">

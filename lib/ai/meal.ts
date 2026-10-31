@@ -77,7 +77,7 @@ export async function analyzeMealEvent(ctx: AuthedContext, event: StoredEvent, s
  */
 async function correctSlot(ctx: AuthedContext, event: StoredEvent, analysis: MealAnalysis, settings: Settings): Promise<void> {
   const payload = payloadOf(event, "meal");
-  if (!payload?.slot || event.meta?.slot_locked === true || !analysis.slot_guess) return;
+  if (!payload?.slot || payload.slot_chosen === true || event.meta?.slot_locked === true || !analysis.slot_guess) return;
   const earlier = (await listEvents(ctx, event.logical_day, event.logical_day))
     .filter((e) => e.kind === "meal" && e.id !== event.id && e.occurred_at < event.occurred_at)
     .map((e) => mealSlotOf(e))
