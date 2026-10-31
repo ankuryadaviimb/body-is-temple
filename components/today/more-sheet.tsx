@@ -1,0 +1,159 @@
+"use client";
+
+import { useState } from "react";
+import { logEvent } from "@/lib/client/log";
+import { Choice, Sheet } from "../sheet";
+import { useToast } from "../toast";
+
+type Panel = "menu" | "meal_text" | "weight" | "mood" | "stress" | "symptom" | "note" | "workout";
+
+/** Less frequent logs. Every one is a tap or two; text is optional and short. */
+export function MoreSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const [panel, setPanel] = useState<Panel>("menu");
+  const [text, setText] = useState("");
+  const [num, setNum] = useState<string>("");
+  const [level, setLevel] = useState<number | undefined>(undefined);
+  const [symptom, setSymptom] = useState<"bleeding" | "pain" | "fissure" | "other" | undefined>(undefined);
+  const { show, showFeedback } = useToast();
+
+  function close() {
+    setPanel("menu");
+    setText("");
+    setNum("");
+    setLevel(undefined);
+    setSymptom(undefined);
+    onClose();
+  }
+
+  async function quick(kind: "intimacy" | "late_work") {
+    await logEvent(kind, {});
+    show(kind === "intimacy" ? "Logged privately." : "Logged. Late nights often show up in the next morning.", "info");
+    close();
+  }
+
+  async function submit() {
+    if (panel === "meal_text" && text.trim()) {
+      const { feedback } = await logEvent("meal", { text: text.trim().slice(0, 500) });
+      showFeedback(feedback, "Meal saved. Details appear in a few seconds.");
+    } else if (panel === "weight" && Number(num) >= 25) {
+      await logEvent("weigh_in", { kg: Math.round(Number(num) * 10) / 10 });
+      show("Weight saved.", "info");
+    } else if ((panel === "mood" || panel === "stress") && level) {
+      await logEvent(panel, { level });
+      show("Saved.", "info");
+    } else if (panel === "symptom" && symptom) {
+      const { feedback } = await logEvent("symptom", { type: symptom, ...(text.trim() ? { text: text.trim().slice(0, 500) } : {}) });
+      showFeedback(
+        feedback,
+        symptom === "bleeding"
+          ? "Saved. If bleeding is more than streaks or keeps happening, please see your doctor."
+          : "Saved.",
+      );
+    } else if (panel === "note" && text.trim()) {
+      await logEvent("note", { text: text.trim().slice(0, 1000) });
+      show("Note saved.", "info");
+    } else if (panel === "workout" && text.trim() && Number(num) > 0) {
+      await logEvent("workout", { type: text.trim().slice(0, 60), duration_min: Math.round(Number(num)) });
+      show("Workout saved.", "good");
+    } else {
+      return;
+    }
+    close();
+  }
+
+  const input = "h-12 w-full rounded-xl border border-line bg-surface-2 px-4 text-base";
+  const titles: Record<Panel, string> = {
+    menu: "Log something else",
+    meal_text: "Describe a meal",
+    weight: "Weight",
+    mood: "Mood",
+    stress: "Stress",
+    symptom: "Symptom",
+    note: "Note",
+    workout: "Workout",
+  };
+
+  return (
+    <Sheet open={open} title={titles[panel]} onClose={close}>
+      {panel === "menu" ? (
+        <div className="grid grid-cols-2 gap-2">
+          {(
+            [
+              ["meal_text", "Meal by text"],
+              ["workout", "Workout"],
+              ["weight", "Weight"],
+              ["mood", "Mood"],
+              ["stress", "Stress"],
+              ["symptom", "Symptom"],
+              ["note", "Note"],
+            ] as [Panel, string][]
+          ).map(([p, label]) => (
+            <button key={p} type="button" onClick={() => setPanel(p)} className="h-14 rounded-2xl bg-surface-2 font-medium">
+              {label}
+            </button>
+          ))}
+          <button type="button" onClick={() => quick("intimacy")} className="h-14 rounded-2xl bg-surface-2 font-medium">
+            Intimacy
+          </button>
+          <button type="button" onClick={() => quick("late_work")} className="h-14 rounded-2xl bg-surface-2 font-medium">
+            Worked late
+          </button>
+        </div>
+      ) : (
+        <div className="flex flex-col gap-3">
+          {panel === "meal_text" || panel === "note" ? (
+            <textarea
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              maxLength={panel === "note" ? 1000 : 500}
+              rows={3}
+              placeholder={panel === "meal_text" ? "e.g. 2 roti, moong dal, curd" : "Anything worth remembering"}
+              className="rounded-xl border border-line bg-surface-2 p-4 text-base"
+            />
+          ) : null}
+          {panel === "weight" ? (
+            <input inputMode="decimal" value={num} onChange={(e) => setNum(e.target.value)} placeholder="kg" className={input} />
+          ) : null}
+          {panel === "workout" ? (
+            <>
+              <input value={text} onChange={(e) => setText(e.target.value)} placeholder="e.g. HIIT class, yoga, run" maxLength={60} className={input} />
+              <input inputMode="numeric" value={num} onChange={(e) => setNum(e.target.value)} placeholder="Minutes" className={input} />
+            </>
+          ) : null}
+          {panel === "mood" || panel === "stress" ? (
+            <Choice
+              label={panel === "mood" ? "1 is low, 5 is great" : "1 is calm, 5 is very stressed"}
+              value={level}
+              onChange={setLevel}
+              options={[1, 2, 3, 4, 5].map((v) => ({ value: v, label: String(v) }))}
+            />
+          ) : null}
+          {panel === "symptom" ? (
+            <>
+              <Choice
+                label="What happened?"
+                value={symptom}
+                onChange={setSymptom}
+                options={[
+                  { value: "bleeding", label: "Bleeding" },
+                  { value: "pain", label: "Pain" },
+                  { value: "fissure", label: "Fissure or cut" },
+                  { value: "other", label: "Other" },
+                ]}
+              />
+              <input value={text} onChange={(e) => setText(e.target.value)} placeholder="Details (optional)" maxLength={500} className={input} />
+            </>
+          ) : null}
+          <div className="flex gap-3">
+            <button type="button" onClick={() => setPanel("menu")} className="h-12 flex-1 rounded-xl border border-line font-semibold">
+              Back
+            </button>
+            <button type="button" onClick={() => void submit()} className="h-12 flex-[2] rounded-xl bg-brand font-semibold text-brand-ink">
+              Save
+            </button>
+          </div>
+        </div>
+      )}
+    </Sheet>
+  );
+}

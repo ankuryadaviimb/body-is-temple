@@ -1,0 +1,125 @@
+@import "tailwindcss";
+
+/*
+ * Design tokens. Calm warm neutrals with one teal brand color, and one color per ring.
+ * No inline style attributes anywhere in the app (the CSP blocks them); dynamic visuals
+ * use classes, data attributes or SVG attributes instead.
+ */
+:root {
+  --bg: #f6f4ef;
+  --surface: #ffffff;
+  --surface-2: #efebe2;
+  --ink: #1c2220;
+  --ink-2: #5a6360;
+  --line: #e1ddd2;
+  --brand: #0f766e;
+  --brand-ink: #ffffff;
+  --brand-soft: #d7eeeb;
+  --gut: #0f766e;
+  --fuel: #b8710b;
+  --move: #3d8a2d;
+  --rest: #4c56c9;
+  --good: #2b7a4b;
+  --tip: #8a5a00;
+  --care: #b42318;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0e1211;
+    --surface: #161b1a;
+    --surface-2: #1e2523;
+    --ink: #e7ebe9;
+    --ink-2: #9aa4a0;
+    --line: #2a3230;
+    --brand: #2bb3a6;
+    --brand-ink: #04201d;
+    --brand-soft: #12332f;
+    --gut: #2bb3a6;
+    --fuel: #e7a23a;
+    --move: #6cc24a;
+    --rest: #8d97ff;
+    --good: #5fcf8f;
+    --tip: #f0b44c;
+    --care: #ff7a6b;
+  }
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-ink: var(--ink);
+  --color-ink-2: var(--ink-2);
+  --color-line: var(--line);
+  --color-brand: var(--brand);
+  --color-brand-ink: var(--brand-ink);
+  --color-brand-soft: var(--brand-soft);
+  --color-gut: var(--gut);
+  --color-fuel: var(--fuel);
+  --color-move: var(--move);
+  --color-rest: var(--rest);
+  --color-good: var(--good);
+  --color-tip: var(--tip);
+  --color-care: var(--care);
+  --font-sans: ui-sans-serif, -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, sans-serif;
+}
+
+html,
+body {
+  background: var(--bg);
+  color: var(--ink);
+}
+
+body {
+  font-family: var(--font-sans);
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior-y: none;
+}
+
+.pt-safe {
+  padding-top: max(env(safe-area-inset-top), 0.5rem);
+}
+
+.pb-safe {
+  padding-bottom: max(env(safe-area-inset-bottom), 0.5rem);
+}
+
+/* Breathing pacer: inhale 4 s (grow), exhale 7 s (shrink), driven by data-phase. */
+.pacer-circle {
+  transform: scale(0.55);
+  transition-property: transform;
+  transition-timing-function: ease-in-out;
+}
+[data-phase="in"] .pacer-circle {
+  transform: scale(1);
+  transition-duration: 4s;
+}
+[data-phase="out"] .pacer-circle {
+  transform: scale(0.55);
+  transition-duration: 7s;
+}
+[data-phase="hold"] .pacer-circle {
+  transform: scale(1);
+  transition-duration: 0.3s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pacer-circle {
+    transition-duration: 0s !important;
+  }
+}
+
+.toast-enter {
+  animation: toast-in 180ms ease-out;
+}
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
