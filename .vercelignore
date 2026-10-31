@@ -1,0 +1,10 @@
+# Never upload personal data or secrets with CLI deploys.
+private/
+*.pdf
+*.heic
+exports/
+.env*
+!.env.example
+node_modules/
+.next/
+tsconfig.tsbuildinfo
