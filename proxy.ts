@@ -11,7 +11,7 @@ import { SESSION_COOKIE_OPTIONS } from "@/lib/supabase/cookie-options";
  * 3. Sends signed-out visitors to /login. API routes check auth themselves.
  */
 
-const PUBLIC_PATHS = new Set(["/login"]);
+const PUBLIC_PATHS = new Set(["/login", ...(process.env.NODE_ENV === "development" ? ["/dev/preview"] : [])]);
 
 export async function proxy(request: NextRequest) {
   const nonce = newNonce();
@@ -72,7 +72,7 @@ export async function proxy(request: NextRequest) {
 export const config = {
   matcher: [
     {
-      source: "/((?!api|_next/static|_next/image|favicon.ico|icons|icon|apple-icon|manifest.webmanifest|sw.js|robots.txt).*)",
+      source: "/((?!api|_next/static|_next/image|favicon.ico|icons|icon|apple-icon|splash|manifest.webmanifest|sw.js|robots.txt).*)",
       missing: [
         { type: "header", key: "next-router-prefetch" },
         { type: "header", key: "purpose", value: "prefetch" },

@@ -30,7 +30,11 @@ export type RingContext = {
   steps: number | null;
 };
 
-const pending = (done: boolean, isToday: boolean): boolean | null => (done ? true : isToday ? null : false);
+/*
+ * Open items count in the ring on every day, today included, so a ring is only full when
+ * everything that applies is done. `null` is reserved for segments that do not apply
+ * (no data source yet, no class that day, no target set).
+ */
 
 export function computeRings(day: StoredEvent[], ctx: RingContext): Ring[] {
   const { settings, isToday } = ctx;
@@ -40,12 +44,12 @@ export function computeRings(day: StoredEvent[], ctx: RingContext): Ring[] {
     id: "gut",
     label: "Gut",
     segments: [
-      { id: "toilet", label: "Toilet session logged", done: pending(ofKind(day, "toilet").length > 0, isToday) },
-      { id: "practice", label: "5-minute breathing practice", done: pending(practiceMinutes(day) >= 4, isToday) },
+      { id: "toilet", label: "Toilet session logged", done: ofKind(day, "toilet").length > 0 },
+      { id: "practice", label: "5-minute breathing practice", done: practiceMinutes(day) >= 4 },
       {
         id: "isabgol",
         label: "Isabgol on time",
-        done: isabgol === true ? true : isabgol === false ? false : isToday ? null : false,
+        done: isabgol === true,
       },
     ],
   };
@@ -55,15 +59,15 @@ export function computeRings(day: StoredEvent[], ctx: RingContext): Ring[] {
     id: "fuel",
     label: "Fuel",
     segments: [
-      { id: "meals", label: "Main meals photographed", done: pending(mainMeals(day).length >= 2, isToday) },
-      { id: "water", label: "Water target", done: pending(waterMl(day) >= settings.water_target_ml, isToday) },
+      { id: "meals", label: "Main meals photographed", done: mainMeals(day).length >= 2 },
+      { id: "water", label: "Water target", done: waterMl(day) >= settings.water_target_ml },
       {
         id: "protein",
         label: "Protein target (estimate)",
         done:
           settings.protein_target_g === null || protein.analyzedMeals === 0
             ? null
-            : pending(protein.grams >= settings.protein_target_g, isToday),
+            : protein.grams >= settings.protein_target_g,
       },
     ],
   };
@@ -85,7 +89,7 @@ export function computeRings(day: StoredEvent[], ctx: RingContext): Ring[] {
       {
         id: "workout",
         label: "Class or workout",
-        done: workouts.length > 0 ? true : classDay ? pending(false, isToday) : null,
+        done: workouts.length > 0 ? true : classDay ? false : null,
       },
       {
         id: "steps",
@@ -93,12 +97,12 @@ export function computeRings(day: StoredEvent[], ctx: RingContext): Ring[] {
         done:
           ctx.steps === null || settings.steps_target === null
             ? null
-            : pending(ctx.steps >= settings.steps_target, isToday),
+            : ctx.steps >= settings.steps_target,
       },
       {
         id: "walk",
         label: "Walk after a meal",
-        done: meals.length === 0 ? null : pending(walkedAfterMeal, isToday),
+        done: meals.length === 0 ? null : walkedAfterMeal,
       },
     ],
   };
@@ -110,8 +114,9 @@ export function computeRings(day: StoredEvent[], ctx: RingContext): Ring[] {
     // Times after midnight count as 24:xx so they compare with a late target.
     const minutes = p.minutes < 12 * 60 ? p.minutes + 24 * 60 : p.minutes;
     inBedByTarget = minutes <= settings.bedtime_target_min + 30;
-  } else if (!isToday) {
-    inBedByTarget = null;
+  } else if (isToday) {
+    // Still open tonight. On past days an unlogged bedtime is unknown, not missed.
+    inBedByTarget = false;
   }
   const rest: Ring = {
     id: "rest",

@@ -18,7 +18,8 @@ export function buildCsp(nonce: string, isDev: boolean): string {
     "base-uri 'self'",
     "form-action 'self'",
     "frame-ancestors 'none'",
-    "upgrade-insecure-requests",
+    // Production only: on the local http dev server this would break every script.
+    ...(isDev ? [] : ["upgrade-insecure-requests"]),
   ];
   return directives.join("; ");
 }

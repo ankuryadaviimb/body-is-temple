@@ -10,21 +10,31 @@ const TABS = [
   { href: "/settings", label: "Settings", Icon: GearIcon },
 ];
 
+/** Session screens are full-screen and focused, so the tab bar steps aside there. */
+export const FOCUS_ROUTES = ["/toilet", "/practice", "/reset"];
+
+export function isFocusRoute(path: string): boolean {
+  return FOCUS_ROUTES.some((r) => path === r || path.startsWith(`${r}/`));
+}
+
 export function BottomNav() {
   const path = usePathname();
+  if (isFocusRoute(path)) return null;
   return (
-    <nav className="pb-safe fixed inset-x-0 bottom-0 z-40 border-t border-line bg-surface/95 backdrop-blur">
-      <ul className="mx-auto flex max-w-md justify-around">
+    <nav className="pb-safe fixed inset-x-0 bottom-0 z-40 border-t border-line bg-bg/80 backdrop-blur-xl backdrop-saturate-150">
+      <ul className="mx-auto flex max-w-md justify-around px-2 pt-1.5">
         {TABS.map(({ href, label, Icon }) => {
           const active = href === "/" ? path === "/" : path.startsWith(href);
           return (
             <li key={href}>
               <Link
                 href={href}
-                className={`flex min-w-20 flex-col items-center gap-0.5 px-3 py-2 text-xs font-medium ${active ? "text-brand" : "text-ink-2"}`}
+                className={`pressable flex min-w-20 flex-col items-center gap-1 px-3 py-1 text-[11px] font-semibold ${active ? "text-brand" : "text-ink-3"}`}
                 aria-current={active ? "page" : undefined}
               >
-                <Icon className="size-6" />
+                <span className={`flex h-8 w-14 items-center justify-center rounded-full ${active ? "bg-brand/15" : ""}`}>
+                  <Icon className="size-[22px]" />
+                </span>
                 {label}
               </Link>
             </li>

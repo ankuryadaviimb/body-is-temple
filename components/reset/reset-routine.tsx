@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { logEvent, updateEvent } from "@/lib/client/log";
 import type { ResetRoutine } from "@/lib/content/resets";
-import { useWakeLock } from "../breath-pacer";
+import { SessionHeader, useWakeLock } from "../breath-pacer";
 import { useToast } from "../toast";
 
 /** Step-by-step guided reset with a timer per step. Logs the episode when it starts. */
@@ -48,67 +48,89 @@ export function ResetRoutineView({ routine }: { routine: ResetRoutine }) {
     router.push("/");
   }
 
+  const r = 44;
+  const c = 2 * Math.PI * r;
+  const frac = step ? left / step.seconds : 0;
+
   return (
-    <main className="flex flex-col gap-5 pt-4">
-      <div>
-        <h1 className="text-xl font-semibold">{routine.title}</h1>
-        <p className="mt-1 text-sm text-ink-2">{routine.intro}</p>
-      </div>
+    <main className="fade-in flex min-h-[calc(100dvh-5rem)] flex-col gap-5">
+      <SessionHeader title={routine.title} />
 
       {stepIndex === null ? (
         <>
+          <p className="text-center text-[15px] leading-relaxed text-ink-2">{routine.intro}</p>
           {routine.variants.length > 1 ? (
-            <div className="flex gap-2">
+            <div className="flex rounded-2xl bg-surface p-1 shadow-card">
               {routine.variants.map((v) => (
                 <button
                   key={v.id}
                   type="button"
                   onClick={() => setVariantId(v.id)}
                   aria-pressed={v.id === variantId}
-                  className={`h-11 flex-1 rounded-xl border font-medium ${v.id === variantId ? "border-brand bg-brand text-brand-ink" : "border-line bg-surface"}`}
+                  className={`pressable h-10 flex-1 rounded-xl text-[15px] font-semibold ${v.id === variantId ? "bg-brand text-brand-ink" : "text-ink-2"}`}
                 >
                   {v.label}
                 </button>
               ))}
             </div>
           ) : null}
-          <ol className="space-y-3">
+          <ol className="space-y-2.5">
             {variant.steps.map((s, i) => (
-              <li key={s.title} className="rounded-2xl bg-surface p-4">
-                <p className="font-semibold">
-                  {i + 1}. {s.title} <span className="font-normal text-ink-2">· {s.seconds} s</span>
-                </p>
-                <p className="mt-1 text-sm leading-relaxed text-ink-2">{s.text}</p>
+              <li key={s.title} className="flex gap-3 rounded-[22px] bg-surface p-4 shadow-card">
+                <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-brand/15 text-sm font-semibold text-brand">{i + 1}</span>
+                <div>
+                  <p className="text-[15px] font-semibold">
+                    {s.title} <span className="font-normal text-ink-3">· {s.seconds} s</span>
+                  </p>
+                  <p className="mt-1 text-sm leading-relaxed text-ink-2">{s.text}</p>
+                </div>
               </li>
             ))}
           </ol>
-          <p className="rounded-2xl bg-brand-soft px-4 py-3 text-sm leading-relaxed">{routine.reframe}</p>
-          <button type="button" onClick={() => void start()} className="h-14 rounded-2xl bg-brand font-semibold text-brand-ink">
+          <p className="rounded-[22px] bg-brand-soft px-4 py-3.5 text-sm leading-relaxed">{routine.reframe}</p>
+          <button type="button" onClick={() => void start()} className="pressable mt-auto h-14 rounded-2xl bg-brand font-semibold text-brand-ink">
             Start
           </button>
         </>
       ) : done ? (
-        <div className="flex flex-col gap-3">
-          <p className="text-lg font-semibold">Done. How do you feel?</p>
-          <button type="button" onClick={() => void finish(true)} className="h-14 rounded-2xl bg-brand font-semibold text-brand-ink">
+        <div className="flex flex-1 flex-col justify-center gap-3">
+          <p className="mb-3 text-center text-[22px] font-semibold tracking-tight">Done. How do you feel?</p>
+          <button type="button" onClick={() => void finish(true)} className="pressable h-14 rounded-2xl bg-brand font-semibold text-brand-ink">
             Better
           </button>
-          <button type="button" onClick={() => void finish(false)} className="h-14 rounded-2xl border border-line bg-surface font-semibold">
+          <button type="button" onClick={() => void finish(false)} className="pressable h-14 rounded-2xl bg-surface font-semibold shadow-card">
             About the same
           </button>
         </div>
       ) : step ? (
-        <div className="flex flex-col items-center gap-5 rounded-3xl bg-surface p-6 text-center">
-          <p className="text-sm text-ink-2">
+        <div className="flex flex-1 flex-col items-center justify-center gap-5 text-center">
+          <p className="text-[13px] font-semibold uppercase tracking-wide text-ink-3">
             Step {stepIndex + 1} of {variant.steps.length}
           </p>
-          <h2 className="text-2xl font-semibold">{step.title}</h2>
-          <p className="leading-relaxed">{step.text}</p>
-          <p className="text-5xl font-semibold tabular-nums">{left}</p>
+          <div className="relative flex size-44 items-center justify-center">
+            <svg viewBox="0 0 100 100" className="absolute inset-0 size-full text-brand" aria-hidden>
+              <circle cx="50" cy="50" r={r} fill="none" stroke="currentColor" strokeOpacity="0.15" strokeWidth="5" />
+              <circle
+                className="ring-arc"
+                cx="50"
+                cy="50"
+                r={r}
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="5"
+                strokeLinecap="round"
+                strokeDasharray={`${frac * c} ${c}`}
+                transform="rotate(-90 50 50)"
+              />
+            </svg>
+            <span className="tabular text-5xl font-semibold">{left}</span>
+          </div>
+          <h2 className="text-[24px] font-semibold tracking-tight">{step.title}</h2>
+          <p className="max-w-sm text-[15px] leading-relaxed text-ink-2">{step.text}</p>
           <button
             type="button"
             onClick={() => goTo(stepIndex + 1)}
-            className={`h-14 w-full rounded-2xl font-semibold ${left === 0 ? "bg-brand text-brand-ink" : "border border-line"}`}
+            className={`pressable mt-2 h-14 w-full rounded-2xl font-semibold ${left === 0 ? "bg-brand text-brand-ink" : "bg-surface shadow-card"}`}
           >
             {stepIndex + 1 < variant.steps.length ? "Next step" : "Finish"}
           </button>

@@ -136,3 +136,70 @@ export const DumbbellIcon = (p: IconProps) => (
     <path d="M6 7v10M3 9v6M18 7v10M21 9v6M6 12h12" />
   </Svg>
 );
+export const TrashIcon = (p: IconProps) => (
+  <Svg {...p}>
+    <path d="M4 7h16M9 7V4.5h6V7M6.5 7l1 13h9l1-13" />
+    <path d="M10 11v5M14 11v5" />
+  </Svg>
+);
+export const PlateIcon = (p: IconProps) => (
+  <Svg {...p}>
+    <circle cx="12" cy="12" r="8.5" />
+    <circle cx="12" cy="12" r="4.5" />
+  </Svg>
+);
+export const NoteIcon = (p: IconProps) => (
+  <Svg {...p}>
+    <path d="M6 3h9l4 4v14H6z" />
+    <path d="M15 3v4h4M9 12h6M9 16h4" />
+  </Svg>
+);
+export const ChevronRightIcon = (p: IconProps) => (
+  <Svg {...p}>
+    <path d="M9 5l7 7-7 7" />
+  </Svg>
+);
+export const ChevronLeftIcon = (p: IconProps) => (
+  <Svg {...p}>
+    <path d="M15 5l-7 7 7 7" />
+  </Svg>
+);
+export const CheckIcon = (p: IconProps) => (
+  <Svg {...p}>
+    <path d="M5 12.5l4.5 4.5L19 7.5" />
+  </Svg>
+);
+export const BulbIcon = (p: IconProps) => (
+  <Svg {...p}>
+    <path d="M9 18h6M10 21h4" />
+    <path d="M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2.1v.5h5V16c0-.9.4-1.6 1-2.1A6 6 0 0 0 12 3z" />
+  </Svg>
+);
+export const HeartIcon = (p: IconProps) => (
+  <Svg {...p}>
+    <path d="M12 20s-7.5-4.6-7.5-10.2A4.3 4.3 0 0 1 12 7a4.3 4.3 0 0 1 7.5 2.8C19.5 15.4 12 20 12 20z" />
+  </Svg>
+);
+export const DotsIcon = (p: IconProps) => (
+  <Svg {...p}>
+    <path d="M6 12h.01M12 12h.01M18 12h.01" strokeWidth="3" />
+  </Svg>
+);
+export const ScaleIcon = (p: IconProps) => (
+  <Svg {...p}>
+    <rect x="4" y="4" width="16" height="16" rx="4" />
+    <path d="M9 9.5a4 4 0 0 1 6 0M12 9.5l1.2-1.8" />
+  </Svg>
+);
+export const ClockIcon = (p: IconProps) => (
+  <Svg {...p}>
+    <circle cx="12" cy="12" r="8.5" />
+    <path d="M12 7.5V12l3 2" />
+  </Svg>
+);
+export const AlertIcon = (p: IconProps) => (
+  <Svg {...p}>
+    <path d="M12 4l9 16H3z" />
+    <path d="M12 10v4M12 17h.01" />
+  </Svg>
+);

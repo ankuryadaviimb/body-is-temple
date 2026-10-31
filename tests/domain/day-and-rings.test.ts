@@ -86,9 +86,20 @@ describe("rings", () => {
     expect(ringProgress(fuel)).toEqual({ done: 3, applicable: 3, ratio: 1 });
   });
 
-  it("shows pending items as null today and as missed on past days", () => {
+  it("counts open items today, so a ring is only full when everything is done", () => {
     const rings = computeRings([], { settings, weekday: 1, isToday: true, sleepMinutes: null, steps: null });
-    expect(rings[0].segments.every((s) => s.done === null)).toBe(true);
+    expect(rings[0].segments.every((s) => s.done === false)).toBe(true);
+    const fuel = computeRings([ev("meal", "2026-11-01 10:00", { slot: "breakfast" }), ev("meal", "2026-11-01 13:30", { slot: "lunch" })], {
+      settings: { ...settings, protein_target_g: null },
+      weekday: 1,
+      isToday: true,
+      sleepMinutes: null,
+      steps: null,
+    })[1];
+    expect(ringProgress(fuel)).toEqual({ done: 1, applicable: 2, ratio: 0.5 });
+    // An unlogged bedtime is open tonight, but unknown (not missed) on past days.
+    expect(rings[3].segments[0].done).toBe(false);
+    expect(computeRings([], { settings, weekday: 1, isToday: false, sleepMinutes: null, steps: null })[3].segments[0].done).toBeNull();
     const past = computeRings([], { settings, weekday: 1, isToday: false, sleepMinutes: null, steps: null });
     expect(past[0].segments[0].done).toBe(false);
   });

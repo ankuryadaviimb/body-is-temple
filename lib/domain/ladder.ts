@@ -156,6 +156,14 @@ export const BRISTOL_LABELS: Record<number, string> = {
   7: "watery",
 };
 
+/** "45 min" or "4 h 25 min". */
+export function formatGap(minutes: number): string {
+  if (minutes < 90) return `${minutes} min`;
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  return m ? `${h} h ${m} min` : `${h} h`;
+}
+
 export type MorningCard = {
   focus: { number: number; total: number; gut: string; other: string; heldDays: number; needed: number };
   yesterday: string[];
@@ -191,7 +199,7 @@ export function buildMorningCard(
     if (isabgol) {
       lines.push(
         gap !== null
-          ? `Isabgol ${gap} minutes after dinner`
+          ? `Isabgol ${formatGap(gap)} after dinner`
           : `Isabgol at ${formatClock(localParts(isabgol.occurred_at, settings.tz).minutes)}`,
       );
     }

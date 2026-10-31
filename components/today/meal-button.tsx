@@ -5,13 +5,14 @@ import { logEvent } from "@/lib/client/log";
 import { prepareMealPhoto } from "@/lib/client/photo";
 import { CameraIcon, ImageIcon } from "../icons";
 import { useToast } from "../toast";
+import { CornerPill, Tile } from "./quick-tiles";
 
 /**
  * One tap opens the camera; the photo is shrunk on the phone and logged at once.
- * The small button picks earlier photos from the library and keeps each photo's
+ * The corner button picks earlier photos from the library and keeps each photo's
  * real "date taken", so meals logged later land at the right time.
  */
-export function MealButtons() {
+export function MealTile({ sub }: { sub: string }) {
   const camera = useRef<HTMLInputElement>(null);
   const library = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
@@ -35,41 +36,22 @@ export function MealButtons() {
   }
 
   return (
-    <div className="relative">
-      <button
-        type="button"
+    <>
+      <Tile
+        icon={<CameraIcon className="size-6" />}
+        tint="bg-fuel/15 text-fuel"
+        title={busy ? "Saving..." : "Meal"}
+        sub={sub}
         onClick={() => camera.current?.click()}
-        disabled={busy}
-        className="flex h-24 w-full flex-col items-center justify-center gap-1 rounded-3xl bg-fuel/15 font-semibold text-ink disabled:opacity-60"
-      >
-        <CameraIcon className="size-8 text-fuel" />
-        {busy ? "Saving..." : "Meal"}
-      </button>
-      <button
-        type="button"
-        onClick={() => library.current?.click()}
-        disabled={busy}
-        aria-label="Add meal photos from your library"
-        className="absolute right-2 top-2 rounded-full bg-surface/80 p-1.5 text-ink-2"
-      >
-        <ImageIcon className="size-5" />
-      </button>
-      <input
-        ref={camera}
-        type="file"
-        accept="image/*"
-        capture="environment"
-        className="hidden"
-        onChange={(e) => void handle(e.target.files, true)}
+        label="Photograph a meal"
+        corner={
+          <CornerPill onClick={() => library.current?.click()} label="Add meal photos from your library">
+            <ImageIcon className="size-4" />
+          </CornerPill>
+        }
       />
-      <input
-        ref={library}
-        type="file"
-        accept="image/*"
-        multiple
-        className="hidden"
-        onChange={(e) => void handle(e.target.files, false)}
-      />
-    </div>
+      <input ref={camera} type="file" accept="image/*" capture="environment" className="hidden" onChange={(e) => void handle(e.target.files, true)} />
+      <input ref={library} type="file" accept="image/*" multiple className="hidden" onChange={(e) => void handle(e.target.files, false)} />
+    </>
   );
 }

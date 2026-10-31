@@ -1,47 +1,54 @@
 @import "tailwindcss";
 
 /*
- * Design tokens. Calm warm neutrals with one teal brand color, and one color per ring.
- * No inline style attributes anywhere in the app (the CSP blocks them); dynamic visuals
- * use classes, data attributes or SVG attributes instead.
+ * Temple design system.
+ * Warm paper in light mode, deep green-black in dark mode, one teal brand color and
+ * one vivid color per ring. No inline style attributes anywhere (the CSP blocks them);
+ * dynamic visuals use classes, data attributes or SVG attributes.
  */
 :root {
-  --bg: #f6f4ef;
+  --bg: #f5f3ee;
   --surface: #ffffff;
-  --surface-2: #efebe2;
-  --ink: #1c2220;
-  --ink-2: #5a6360;
-  --line: #e1ddd2;
-  --brand: #0f766e;
+  --surface-2: #efece5;
+  --surface-3: #e7e3da;
+  --ink: #171c1b;
+  --ink-2: #5d6663;
+  --ink-3: #8b938f;
+  --line: rgba(23, 28, 27, 0.08);
+  --brand: #0d8a7e;
   --brand-ink: #ffffff;
-  --brand-soft: #d7eeeb;
-  --gut: #0f766e;
-  --fuel: #b8710b;
-  --move: #3d8a2d;
-  --rest: #4c56c9;
-  --good: #2b7a4b;
-  --tip: #8a5a00;
-  --care: #b42318;
+  --brand-soft: #dcefeb;
+  --gut: #0d9488;
+  --fuel: #d97706;
+  --move: #4d9a1f;
+  --rest: #5b5bd6;
+  --good: #1f8a4c;
+  --tip: #b26b00;
+  --care: #c2352b;
+  --shadow: 0 1px 2px rgba(23, 28, 27, 0.04), 0 8px 24px rgba(23, 28, 27, 0.06);
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #0e1211;
-    --surface: #161b1a;
-    --surface-2: #1e2523;
-    --ink: #e7ebe9;
-    --ink-2: #9aa4a0;
-    --line: #2a3230;
-    --brand: #2bb3a6;
-    --brand-ink: #04201d;
-    --brand-soft: #12332f;
-    --gut: #2bb3a6;
-    --fuel: #e7a23a;
-    --move: #6cc24a;
-    --rest: #8d97ff;
-    --good: #5fcf8f;
-    --tip: #f0b44c;
-    --care: #ff7a6b;
+    --bg: #0a0d0c;
+    --surface: #141918;
+    --surface-2: #1c2321;
+    --surface-3: #252e2b;
+    --ink: #edf1ef;
+    --ink-2: #a0aaa6;
+    --ink-3: #6e7a76;
+    --line: rgba(255, 255, 255, 0.07);
+    --brand: #2dd4bf;
+    --brand-ink: #032521;
+    --brand-soft: #0f2e2a;
+    --gut: #2dd4bf;
+    --fuel: #fbbf24;
+    --move: #a3e635;
+    --rest: #a5b4fc;
+    --good: #4ade80;
+    --tip: #fbbf24;
+    --care: #fb7185;
+    --shadow: 0 1px 0 rgba(255, 255, 255, 0.03) inset, 0 8px 24px rgba(0, 0, 0, 0.35);
   }
 }
 
@@ -49,8 +56,10 @@
   --color-bg: var(--bg);
   --color-surface: var(--surface);
   --color-surface-2: var(--surface-2);
+  --color-surface-3: var(--surface-3);
   --color-ink: var(--ink);
   --color-ink-2: var(--ink-2);
+  --color-ink-3: var(--ink-3);
   --color-line: var(--line);
   --color-brand: var(--brand);
   --color-brand-ink: var(--brand-ink);
@@ -62,7 +71,8 @@
   --color-good: var(--good);
   --color-tip: var(--tip);
   --color-care: var(--care);
-  --font-sans: ui-sans-serif, -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, sans-serif;
+  --shadow-card: var(--shadow);
+  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", ui-sans-serif, "Segoe UI", Roboto, sans-serif;
 }
 
 html,
@@ -74,52 +84,144 @@ body {
 body {
   font-family: var(--font-sans);
   -webkit-tap-highlight-color: transparent;
+  -webkit-font-smoothing: antialiased;
   overscroll-behavior-y: none;
+  text-rendering: optimizeLegibility;
+}
+
+button,
+a {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+  touch-action: manipulation;
+}
+
+.tabular {
+  font-variant-numeric: tabular-nums;
 }
 
 .pt-safe {
-  padding-top: max(env(safe-area-inset-top), 0.5rem);
+  padding-top: max(env(safe-area-inset-top), 0.75rem);
 }
 
 .pb-safe {
   padding-bottom: max(env(safe-area-inset-bottom), 0.5rem);
 }
 
+/* Press feedback that feels native. */
+.pressable {
+  transition: transform 120ms ease, opacity 120ms ease, background-color 160ms ease;
+}
+.pressable:active {
+  transform: scale(0.97);
+  opacity: 0.85;
+}
+
+/* Horizontal rails without a visible scrollbar. */
+.no-scrollbar {
+  scrollbar-width: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+/* Ring arcs animate when progress changes. */
+.ring-arc {
+  transition: stroke-dasharray 700ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
 /* Breathing pacer: inhale 4 s (grow), exhale 7 s (shrink), driven by data-phase. */
-.pacer-circle {
-  transform: scale(0.55);
-  transition-property: transform;
+.pacer-core,
+.pacer-glow {
+  transform: scale(0.5);
+  transition-property: transform, opacity;
   transition-timing-function: ease-in-out;
 }
-[data-phase="in"] .pacer-circle {
+.pacer-glow {
+  opacity: 0.35;
+}
+[data-phase="in"] .pacer-core,
+[data-phase="in"] .pacer-glow {
   transform: scale(1);
   transition-duration: 4s;
 }
-[data-phase="out"] .pacer-circle {
-  transform: scale(0.55);
+[data-phase="in"] .pacer-glow {
+  opacity: 0.7;
+}
+[data-phase="out"] .pacer-core,
+[data-phase="out"] .pacer-glow {
+  transform: scale(0.5);
   transition-duration: 7s;
 }
-[data-phase="hold"] .pacer-circle {
-  transform: scale(1);
-  transition-duration: 0.3s;
+[data-phase="hold"] .pacer-core,
+[data-phase="hold"] .pacer-glow {
+  transform: scale(0.62);
+  transition-duration: 0.6s;
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .pacer-circle {
-    transition-duration: 0s !important;
-  }
+.fade-in {
+  animation: fade-in 260ms ease-out both;
 }
-
-.toast-enter {
-  animation: toast-in 180ms ease-out;
-}
-@keyframes toast-in {
+@keyframes fade-in {
   from {
     opacity: 0;
-    transform: translateY(8px);
+    transform: translateY(6px);
   }
   to {
     opacity: 1;
     transform: translateY(0);
+  }
+}
+
+.toast-enter {
+  animation: toast-in 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.sheet-enter {
+  animation: sheet-in 260ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+@keyframes sheet-in {
+  from {
+    transform: translateY(24px);
+    opacity: 0.6;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.row-leave {
+  animation: row-leave 200ms ease-in forwards;
+}
+@keyframes row-leave {
+  to {
+    opacity: 0;
+    transform: translateX(-12px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pacer-core,
+  .pacer-glow,
+  .ring-arc,
+  .pressable {
+    transition-duration: 0s !important;
+  }
+  .fade-in,
+  .toast-enter,
+  .sheet-enter {
+    animation: none;
   }
 }

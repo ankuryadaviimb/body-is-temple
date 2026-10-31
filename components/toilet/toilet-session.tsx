@@ -7,11 +7,11 @@ import { logEvent } from "@/lib/client/log";
 import { ofKind } from "@/lib/domain/day";
 import { payloadOf, type Payload } from "@/lib/domain/events";
 import { BRISTOL_LABELS } from "@/lib/domain/ladder";
-import { BreathPacer, useBreathCycle, useWakeLock } from "../breath-pacer";
+import { BreathPacer, SessionHeader, useBreathCycle, useWakeLock } from "../breath-pacer";
 import { Choice } from "../sheet";
 import { useToast } from "../toast";
 
-const CUES = ["Feet up on a stool, knees above hips", "Lean forward, back straight", "Loose jaw, teeth apart", "Let urine flow first, no pushing"];
+const CUES = ["Feet up, knees above hips", "Lean forward, back straight", "Loose jaw", "Pee first, no pushing"];
 
 function mmss(ms: number) {
   const s = Math.max(0, Math.floor(ms / 1000));
@@ -83,25 +83,36 @@ export function ToiletSession() {
 
   if (stage === "sit") {
     return (
-      <main className="flex flex-col items-center gap-6 pt-4">
-        <div className="flex w-full items-center justify-between">
-          <span className="rounded-full bg-surface-2 px-3 py-1 text-sm font-medium">Round {round} today</span>
-          <span className={`text-2xl font-semibold tabular-nums ${overFive ? "text-care" : ""}`}>{mmss(elapsed)}</span>
+      <main className="fade-in flex min-h-[calc(100dvh-5rem)] flex-col gap-5">
+        <SessionHeader
+          title={`Round ${round} today`}
+          right={
+            <span className={`tabular rounded-full px-3 py-1.5 text-[15px] font-semibold ${overFive ? "bg-care/15 text-care" : "bg-surface text-ink shadow-card"}`}>
+              {mmss(elapsed)}
+            </span>
+          }
+        />
+        <div className="flex flex-1 flex-col items-center justify-center gap-2">
+          <BreathPacer phase={phase} progress={Math.min(1, elapsed / (5 * 60_000))} />
+          <p className="tabular text-sm text-ink-3">
+            {breaths} slow {breaths === 1 ? "breath" : "breaths"}
+            {capBreaths ? ` of ${capBreaths}` : ""}
+          </p>
         </div>
-        <BreathPacer phase={phase} />
-        <p className="text-sm text-ink-2">{breaths} slow breaths</p>
-        {prompt ? <p className="w-full rounded-2xl bg-tip/10 px-4 py-3 text-center text-sm font-medium">{prompt}</p> : null}
-        <ul className="w-full space-y-1 rounded-2xl bg-surface p-4 text-sm text-ink-2">
+        {prompt ? <p className="fade-in rounded-2xl bg-tip/12 px-4 py-3 text-center text-[15px] font-medium leading-snug">{prompt}</p> : null}
+        <ul className="flex flex-wrap justify-center gap-1.5">
           {CUES.map((c) => (
-            <li key={c}>· {c}</li>
+            <li key={c} className="rounded-full bg-surface px-3 py-1.5 text-xs font-medium text-ink-2 shadow-card">
+              {c}
+            </li>
           ))}
-          <li className="pt-1 font-medium text-ink">Push only on the out-breath. Never hold your breath.</li>
         </ul>
-        <div className="grid w-full grid-cols-2 gap-3">
-          <button type="button" onClick={() => finish(false)} className="h-14 rounded-2xl border border-line bg-surface font-semibold">
+        <p className="text-center text-[13px] font-medium text-ink-2">Push only on the out-breath. Never hold your breath.</p>
+        <div className="grid grid-cols-2 gap-3">
+          <button type="button" onClick={() => finish(false)} className="pressable h-14 rounded-2xl bg-surface font-semibold shadow-card">
             Nothing came
           </button>
-          <button type="button" onClick={() => finish(true)} className="h-14 rounded-2xl bg-brand font-semibold text-brand-ink">
+          <button type="button" onClick={() => finish(true)} className="pressable h-14 rounded-2xl bg-brand font-semibold text-brand-ink">
             Done, it came
           </button>
         </div>
@@ -110,9 +121,9 @@ export function ToiletSession() {
   }
 
   return (
-    <main className="pt-4">
-      <h1 className="mb-1 text-xl font-semibold">Quick rating</h1>
-      <p className="mb-5 text-sm text-ink-2">A few taps. Skip anything you are unsure of.</p>
+    <main className="fade-in flex flex-col gap-1">
+      <SessionHeader title="Quick rating" />
+      <p className="mb-4 mt-4 text-center text-sm text-ink-2">A few taps, pre-filled from last time. Skip anything you are unsure of.</p>
       {passed ? (
         <>
           <Choice
@@ -181,7 +192,7 @@ export function ToiletSession() {
         onChange={(v) => setRating((r) => ({ ...r, satisfaction: v }))}
         options={[1, 2, 3, 4, 5].map((v) => ({ value: v, label: String(v) }))}
       />
-      <button type="button" disabled={saving} onClick={() => void save()} className="mt-2 h-14 w-full rounded-2xl bg-brand font-semibold text-brand-ink disabled:opacity-60">
+      <button type="button" disabled={saving} onClick={() => void save()} className="pressable mt-2 h-14 w-full rounded-2xl bg-brand font-semibold text-brand-ink disabled:opacity-60">
         {saving ? "Saving..." : "Save"}
       </button>
     </main>

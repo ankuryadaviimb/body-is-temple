@@ -11,7 +11,7 @@ export type ResetRoutine = { kind: "heavy" | "gas"; title: string; intro: string
 export const RESETS: Record<"heavy" | "gas", ResetRoutine> = {
   heavy: {
     kind: "heavy",
-    title: "Heavy or 'not empty' feeling",
+    title: "Heavy feeling",
     intro: "Sitting tense for hours can make the area feel full even when it is not. These 2 minutes help the muscles let go.",
     reframe:
       "This feeling is usually a false alarm from sensitive nerves, not stool left inside. Notice it, then move on to something else. Focusing on it makes it louder.",

@@ -3,7 +3,7 @@
 import { useEffect } from "react";
 import { CloseIcon } from "./icons";
 
-/** Bottom sheet dialog. Closes on backdrop tap or Escape. */
+/** iOS-style bottom sheet. Closes on backdrop tap or Escape. */
 export function Sheet({
   open,
   title,
@@ -25,15 +25,16 @@ export function Sheet({
   if (!open) return null;
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center" role="dialog" aria-modal="true" aria-label={title}>
-      <button type="button" aria-label="Close" className="absolute inset-0 bg-black/40" onClick={onClose} />
-      <div className="pb-safe relative w-full max-w-md rounded-t-3xl bg-surface px-5 pt-4 shadow-2xl">
-        <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-lg font-semibold">{title}</h2>
-          <button type="button" onClick={onClose} className="rounded-full p-2 text-ink-2" aria-label="Close">
-            <CloseIcon className="size-5" />
+      <button type="button" aria-label="Close" className="fade-in absolute inset-0 bg-black/50 backdrop-blur-[2px]" onClick={onClose} />
+      <div className="sheet-enter pb-safe relative w-full max-w-md rounded-t-[28px] border-t border-line bg-surface px-5 pt-2.5 shadow-2xl">
+        <div className="mx-auto mb-3 h-1.5 w-10 rounded-full bg-surface-3" aria-hidden />
+        <div className="mb-4 flex items-center justify-between">
+          <h2 className="text-[19px] font-semibold tracking-tight">{title}</h2>
+          <button type="button" onClick={onClose} className="pressable flex size-9 items-center justify-center rounded-full bg-surface-2 text-ink-2" aria-label="Close">
+            <CloseIcon className="size-4" />
           </button>
         </div>
-        <div className="max-h-[70dvh] overflow-y-auto pb-4">{children}</div>
+        <div className="max-h-[72dvh] overflow-y-auto pb-5">{children}</div>
       </div>
     </div>
   );
@@ -52,22 +53,25 @@ export function Choice<T extends string | number | boolean>({
   label: string;
 }) {
   return (
-    <fieldset className="mb-4">
-      <legend className="mb-2 text-sm font-medium text-ink-2">{label}</legend>
+    <fieldset className="mb-5">
+      <legend className="mb-2 text-[13px] font-semibold uppercase tracking-wide text-ink-3">{label}</legend>
       <div className="flex flex-wrap gap-2">
-        {options.map((o) => (
-          <button
-            key={String(o.value)}
-            type="button"
-            onClick={() => onChange(o.value)}
-            aria-pressed={value === o.value}
-            className={`min-h-11 rounded-xl border px-3 text-sm font-medium ${
-              value === o.value ? "border-brand bg-brand text-brand-ink" : "border-line bg-surface-2 text-ink"
-            }`}
-          >
-            {o.label}
-          </button>
-        ))}
+        {options.map((o) => {
+          const active = value === o.value;
+          return (
+            <button
+              key={String(o.value)}
+              type="button"
+              onClick={() => onChange(o.value)}
+              aria-pressed={active}
+              className={`pressable min-h-11 rounded-2xl px-4 text-[15px] font-medium ${
+                active ? "bg-brand text-brand-ink shadow-card" : "bg-surface-2 text-ink"
+              }`}
+            >
+              {o.label}
+            </button>
+          );
+        })}
       </div>
     </fieldset>
   );

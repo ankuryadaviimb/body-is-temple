@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { logEvent } from "@/lib/client/log";
 import { PRACTICE_STEPS } from "@/lib/content/resets";
-import { BreathPacer, useBreathCycle, useWakeLock } from "../breath-pacer";
+import { BreathPacer, SessionHeader, useBreathCycle, useWakeLock } from "../breath-pacer";
 import { useToast } from "../toast";
 
 const TARGET_MS = 5 * 60_000;
@@ -12,7 +12,7 @@ const TARGET_MS = 5 * 60_000;
 /** Five minutes of belly breathing with a pelvic floor "drop". Logs itself when done. */
 export function PracticeSession() {
   const router = useRouter();
-  const { showFeedback } = useToast();
+  const { logged } = useToast();
   const [running, setRunning] = useState(false);
   const [startedAt, setStartedAt] = useState<number | null>(null);
   const [now, setNow] = useState(() => Date.now());
@@ -40,8 +40,7 @@ export function PracticeSession() {
     setSaved(true);
     const seconds = Math.round(elapsed / 1000);
     if (seconds >= 60) {
-      const { feedback } = await logEvent("practice", { type: "breathing", duration_s: seconds }, { at: new Date(startedAt ?? Date.now()) });
-      showFeedback(feedback, "Practice saved.");
+      logged(await logEvent("practice", { type: "breathing", duration_s: seconds }, { at: new Date(startedAt ?? Date.now()) }), "Practice saved.");
     }
     router.push("/");
   }
@@ -50,24 +49,37 @@ export function PracticeSession() {
   const secs = Math.floor((remaining % 60_000) / 1000);
 
   return (
-    <main className="flex flex-col items-center gap-6 pt-4">
-      <h1 className="self-start text-xl font-semibold">Breathing practice</h1>
+    <main className="fade-in flex min-h-[calc(100dvh-5rem)] flex-col gap-5">
+      <SessionHeader
+        title="Breathing practice"
+        right={
+          <span className="tabular rounded-full bg-surface px-3 py-1.5 text-[15px] font-semibold shadow-card">
+            {mins}:{String(secs).padStart(2, "0")}
+          </span>
+        }
+      />
+      <div className="flex flex-1 flex-col items-center justify-center gap-2">
+        <BreathPacer
+          phase={phase}
+          inLabel="Breathe in, let the pelvic floor drop"
+          outLabel="Slow breath out, stay soft below"
+          readyLabel="5 minutes, lying down or seated"
+          progress={startedAt ? elapsed / TARGET_MS : undefined}
+        />
+        <p className="tabular text-sm text-ink-3">{breaths} breaths</p>
+      </div>
       {!running && !startedAt ? (
-        <ol className="space-y-2 rounded-2xl bg-surface p-4 text-sm leading-relaxed">
+        <ol className="space-y-2.5 rounded-[24px] bg-surface p-4 text-[15px] leading-relaxed shadow-card">
           {PRACTICE_STEPS.map((s, i) => (
-            <li key={s}>
-              <span className="font-semibold">{i + 1}.</span> {s}
+            <li key={s} className="flex gap-3">
+              <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-brand/15 text-xs font-semibold text-brand">{i + 1}</span>
+              <span>{s}</span>
             </li>
           ))}
         </ol>
       ) : null}
-      <BreathPacer phase={phase} inLabel="Breathe in, let the pelvic floor drop" outLabel="Slow breath out, stay soft below" />
-      <p className="text-3xl font-semibold tabular-nums">
-        {mins}:{String(secs).padStart(2, "0")}
-      </p>
-      <p className="text-sm text-ink-2">{breaths} breaths</p>
       {running ? (
-        <button type="button" onClick={() => void finish()} className="h-14 w-full rounded-2xl border border-line bg-surface font-semibold">
+        <button type="button" onClick={() => void finish()} className="pressable h-14 w-full rounded-2xl bg-surface font-semibold shadow-card">
           Finish now
         </button>
       ) : (
@@ -78,7 +90,7 @@ export function PracticeSession() {
             setNow(Date.now());
             setRunning(true);
           }}
-          className="h-14 w-full rounded-2xl bg-brand font-semibold text-brand-ink"
+          className="pressable h-14 w-full rounded-2xl bg-brand font-semibold text-brand-ink"
         >
           Start 5 minutes
         </button>

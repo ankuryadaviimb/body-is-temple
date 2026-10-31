@@ -7,6 +7,7 @@ import { clearDevice } from "@/lib/client/db";
 import { useSettings } from "@/lib/client/hooks";
 import { refreshFromServer } from "@/lib/client/sync";
 import type { Settings } from "@/lib/domain/settings";
+import { PlusIcon, TrashIcon } from "../icons";
 import { useToast } from "../toast";
 
 type ClassRow = Settings["classes"][number];
@@ -61,68 +62,60 @@ function SettingsForm({ initial }: { initial: Settings }) {
     }
   }
 
-  const input = "h-12 w-full rounded-xl border border-line bg-surface-2 px-4 text-base";
   const num = (v: string) => (v === "" ? null : Number(v));
+  const dirty = JSON.stringify(form) !== JSON.stringify(initial);
+  const field = "tabular w-28 bg-transparent text-right text-[17px] text-ink outline-none placeholder:text-ink-3";
 
   return (
-    <main className="flex flex-col gap-6 pt-2">
-      <h1 className="text-2xl font-semibold tracking-tight">Settings</h1>
+    <main className="fade-in flex flex-col gap-7 pt-2">
+      <header>
+        <p className="text-[13px] font-semibold uppercase tracking-wide text-ink-3">Temple</p>
+        <h1 className="mt-1 text-[32px] font-bold leading-tight tracking-tight">Settings</h1>
+      </header>
 
-      <section className="flex flex-col gap-3 rounded-3xl bg-surface p-4">
-        <h2 className="font-semibold">Body</h2>
-        <label className="text-sm text-ink-2">
-          Weight (kg)
-          <input inputMode="decimal" className={input} value={form.weight_kg ?? ""} onChange={(e) => set("weight_kg", num(e.target.value))} />
-        </label>
-        <label className="text-sm text-ink-2">
-          Height (cm)
-          <input inputMode="decimal" className={input} value={form.height_cm ?? ""} onChange={(e) => set("height_cm", num(e.target.value))} />
-        </label>
-        <label className="text-sm text-ink-2">
-          Protein target (g per day, set from weight if empty)
-          <input inputMode="numeric" className={input} value={form.protein_target_g ?? ""} onChange={(e) => set("protein_target_g", num(e.target.value))} />
-        </label>
-      </section>
+      <Group title="Body" note="Weight sets a starting protein target of 1.2 g per kg. The coach tunes it over time.">
+        <Row label="Weight" unit="kg">
+          <input inputMode="decimal" placeholder="Add" className={field} value={form.weight_kg ?? ""} onChange={(e) => set("weight_kg", num(e.target.value))} />
+        </Row>
+        <Row label="Height" unit="cm">
+          <input inputMode="decimal" placeholder="Add" className={field} value={form.height_cm ?? ""} onChange={(e) => set("height_cm", num(e.target.value))} />
+        </Row>
+        <Row label="Protein target" unit="g a day">
+          <input inputMode="numeric" placeholder="Auto" className={field} value={form.protein_target_g ?? ""} onChange={(e) => set("protein_target_g", num(e.target.value))} />
+        </Row>
+      </Group>
 
-      <section className="flex flex-col gap-3 rounded-3xl bg-surface p-4">
-        <h2 className="font-semibold">Daily targets</h2>
-        <label className="text-sm text-ink-2">
-          Water (ml per day)
-          <input inputMode="numeric" className={input} value={form.water_target_ml} onChange={(e) => set("water_target_ml", Number(e.target.value) || 0)} />
-        </label>
-        <label className="text-sm text-ink-2">
-          Usual tea (ml per cup, logged by one tap)
-          <input inputMode="numeric" className={input} value={form.tea_ml} onChange={(e) => set("tea_ml", Number(e.target.value) || 0)} />
-        </label>
-        <label className="text-sm text-ink-2">
-          Bedtime target
+      <Group title="Daily targets">
+        <Row label="Water" unit="ml">
+          <input inputMode="numeric" className={field} value={form.water_target_ml} onChange={(e) => set("water_target_ml", Number(e.target.value) || 0)} />
+        </Row>
+        <Row label="Usual tea" unit="ml a cup">
+          <input inputMode="numeric" className={field} value={form.tea_ml} onChange={(e) => set("tea_ml", Number(e.target.value) || 0)} />
+        </Row>
+        <Row label="Bedtime target">
           <input
             type="time"
-            className={input}
+            className="bg-transparent text-right text-[17px] text-ink outline-none"
             value={toTime(form.bedtime_target_min)}
             onChange={(e) => {
               const m = fromTime(e.target.value);
               set("bedtime_target_min", m < 12 * 60 ? m + 24 * 60 : m);
             }}
           />
-        </label>
-        <label className="text-sm text-ink-2">
-          Isabgol, minutes after dinner
-          <input inputMode="numeric" className={input} value={form.isabgol_delay_min} onChange={(e) => set("isabgol_delay_min", Number(e.target.value) || 0)} />
-        </label>
-        <label className="text-sm text-ink-2">
-          Time zone
-          <input className={input} value={form.tz} onChange={(e) => set("tz", e.target.value)} />
-        </label>
-      </section>
+        </Row>
+        <Row label="Isabgol delay" unit="min later">
+          <input inputMode="numeric" className={field} value={form.isabgol_delay_min} onChange={(e) => set("isabgol_delay_min", Number(e.target.value) || 0)} />
+        </Row>
+        <Row label="Time zone">
+          <input className="w-44 bg-transparent text-right text-[15px] text-ink-2 outline-none" value={form.tz} onChange={(e) => set("tz", e.target.value)} />
+        </Row>
+      </Group>
 
-      <section className="flex flex-col gap-3 rounded-3xl bg-surface p-4">
-        <h2 className="font-semibold">Weekly classes</h2>
-        <p className="text-sm text-ink-2">Your class days, so rest days never count against you.</p>
+      <Group title="Weekly classes" note="Your class days, so rest days never count against you.">
         {form.classes.map((c, i) => (
-          <div key={`${c.weekday}-${c.start_min}-${i}`} className="flex items-center gap-2">
+          <div key={`${c.weekday}-${c.start_min}-${i}`} className="flex items-center gap-2 px-4 py-2.5">
             <select
-              className="h-11 rounded-xl border border-line bg-surface-2 px-2"
+              className="h-10 rounded-xl bg-surface-2 px-2 text-[15px]"
               value={c.weekday}
               onChange={(e) => set("classes", form.classes.map((x, j) => (j === i ? { ...x, weekday: Number(e.target.value) } : x)))}
             >
@@ -134,23 +127,30 @@ function SettingsForm({ initial }: { initial: Settings }) {
             </select>
             <input
               type="time"
-              className="h-11 rounded-xl border border-line bg-surface-2 px-2"
+              className="h-10 rounded-xl bg-surface-2 px-2 text-[15px]"
               value={toTime(c.start_min)}
               onChange={(e) => set("classes", form.classes.map((x, j) => (j === i ? { ...x, start_min: fromTime(e.target.value) } : x)))}
             />
             <select
-              className="h-11 flex-1 rounded-xl border border-line bg-surface-2 px-2"
+              className="h-10 min-w-0 flex-1 rounded-xl bg-surface-2 px-2 text-[15px]"
               value={c.kind}
               onChange={(e) =>
-                set("classes", form.classes.map((x, j) => (j === i ? { ...x, kind: e.target.value as ClassRow["kind"], label: e.target.value === "yoga" ? "Yoga" : e.target.value === "group" ? "Group class" : "Class" } : x)))
+                set(
+                  "classes",
+                  form.classes.map((x, j) =>
+                    j === i
+                      ? { ...x, kind: e.target.value as ClassRow["kind"], label: e.target.value === "yoga" ? "Yoga" : e.target.value === "group" ? "Group class" : "Class" }
+                      : x,
+                  ),
+                )
               }
             >
               <option value="group">Group class</option>
               <option value="yoga">Yoga</option>
               <option value="other">Other</option>
             </select>
-            <button type="button" onClick={() => set("classes", form.classes.filter((_, j) => j !== i))} className="h-11 px-2 text-sm text-care" aria-label="Remove class">
-              Remove
+            <button type="button" onClick={() => set("classes", form.classes.filter((_, j) => j !== i))} className="pressable flex size-10 items-center justify-center rounded-xl text-care" aria-label="Remove class">
+              <TrashIcon className="size-[18px]" />
             </button>
           </div>
         ))}
@@ -158,25 +158,51 @@ function SettingsForm({ initial }: { initial: Settings }) {
           type="button"
           disabled={form.classes.length >= 21}
           onClick={() => set("classes", [...form.classes, { weekday: 1, start_min: 7 * 60, label: "Group class", kind: "group" }])}
-          className="h-11 rounded-xl border border-dashed border-line text-sm font-medium"
+          className="pressable flex h-12 w-full items-center gap-2 px-4 text-[15px] font-semibold text-brand"
         >
-          Add a class
+          <PlusIcon className="size-5" /> Add a class
         </button>
-      </section>
+      </Group>
 
-      <button type="button" disabled={saving} onClick={() => void save()} className="h-14 rounded-2xl bg-brand font-semibold text-brand-ink disabled:opacity-60">
-        {saving ? "Saving..." : "Save settings"}
-      </button>
+      {dirty ? (
+        <div className="fade-in fixed inset-x-0 bottom-[calc(env(safe-area-inset-bottom)+4.75rem)] z-30 px-4">
+          <div className="mx-auto flex max-w-md items-center gap-3 rounded-2xl border border-line bg-surface-2/95 p-2 pl-4 shadow-card backdrop-blur-xl">
+            <span className="flex-1 text-[15px] font-medium">Unsaved changes</span>
+            <button type="button" onClick={() => setForm(initial)} className="pressable h-10 rounded-xl px-3 text-[15px] font-semibold text-ink-2">
+              Discard
+            </button>
+            <button type="button" disabled={saving} onClick={() => void save()} className="pressable h-10 rounded-xl bg-brand px-4 text-[15px] font-semibold text-brand-ink disabled:opacity-60">
+              {saving ? "Saving..." : "Save"}
+            </button>
+          </div>
+        </div>
+      ) : null}
 
-      <section className="flex flex-col gap-3 rounded-3xl bg-surface p-4">
-        <h2 className="font-semibold">Privacy</h2>
-        <p className="text-sm leading-relaxed text-ink-2">
-          Your logs live in your own database and on this phone. Photos are shrunk on the phone first, which removes location and device details. AI providers used for analysis do not train on your data.
-        </p>
-        <button type="button" onClick={() => void signOut()} className="h-12 rounded-xl border border-care/40 font-semibold text-care">
+      <Group title="Privacy" note="Photos are shrunk on the phone before upload, which removes location and device details. The AI providers used do not train on your data.">
+        <button type="button" onClick={() => void signOut()} className="pressable flex h-12 w-full items-center px-4 text-[17px] font-medium text-care">
           Sign out and clear this phone
         </button>
-      </section>
+      </Group>
     </main>
+  );
+}
+
+function Group({ title, note, children }: { title: string; note?: string; children: React.ReactNode }) {
+  return (
+    <section>
+      <h2 className="mb-2 px-4 text-[13px] font-semibold uppercase tracking-wide text-ink-3">{title}</h2>
+      <div className="divide-y divide-line overflow-hidden rounded-[22px] bg-surface shadow-card">{children}</div>
+      {note ? <p className="mt-2 px-4 text-xs leading-relaxed text-ink-3">{note}</p> : null}
+    </section>
+  );
+}
+
+function Row({ label, unit, children }: { label: string; unit?: string; children: React.ReactNode }) {
+  return (
+    <label className="flex min-h-[52px] items-center gap-3 px-4">
+      <span className="flex-1 text-[17px]">{label}</span>
+      {children}
+      {unit ? <span className="w-16 shrink-0 text-[15px] text-ink-3">{unit}</span> : null}
+    </label>
   );
 }
