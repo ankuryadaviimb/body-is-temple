@@ -3,10 +3,11 @@ import { z } from "zod";
 import { analyzeMealEvent } from "@/lib/ai/meal";
 import { EventBatch } from "@/lib/domain/events";
 import { assertWriteAllowed, handleError, HttpError, json, readJson } from "@/lib/http/guard";
+import { ensureCoachCard } from "@/lib/server/coach-card";
 import { insertEvents, listEvents } from "@/lib/server/events";
 import { loadSettings } from "@/lib/server/settings";
 import { requireUser } from "@/lib/supabase/server";
-import { daysBetween } from "@/lib/domain/time";
+import { addDays, daysBetween } from "@/lib/domain/time";
 
 export const maxDuration = 60;
 
@@ -44,6 +45,12 @@ export async function POST(req: Request) {
       after(async () => {
         for (const meal of textMeals) await analyzeMealEvent(ctx, meal, settings);
       });
+    }
+
+    // Logging bedtime closes the day, so tomorrow's morning card can be written tonight.
+    const sleep = stored.filter((e) => e.kind === "sleep").at(-1);
+    if (sleep && Date.now() - new Date(sleep.occurred_at).getTime() < 12 * 3_600_000) {
+      after(() => ensureCoachCard(ctx, settings, addDays(sleep.logical_day, 1)));
     }
     return json({ events: stored });
   } catch (err) {

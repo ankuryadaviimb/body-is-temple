@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { apiSend } from "@/lib/client/api";
@@ -7,8 +8,10 @@ import { clearDevice } from "@/lib/client/db";
 import { useSettings } from "@/lib/client/hooks";
 import { refreshFromServer } from "@/lib/client/sync";
 import type { Settings } from "@/lib/domain/settings";
-import { PlusIcon, TrashIcon } from "../icons";
+import { zoneLabel } from "@/lib/domain/time";
+import { BookIcon, ChartIcon, ChevronRightIcon, PlusIcon, TrashIcon } from "../icons";
 import { useToast } from "../toast";
+import { TimeZoneSheet } from "./time-zone-sheet";
 
 type ClassRow = Settings["classes"][number];
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -33,6 +36,7 @@ function SettingsForm({ initial }: { initial: Settings }) {
   const { show } = useToast();
   const [form, setForm] = useState<Settings>(initial);
   const [saving, setSaving] = useState(false);
+  const [tzOpen, setTzOpen] = useState(false);
 
   const set = <K extends keyof Settings>(key: K, value: Settings[K]) => setForm((f) => ({ ...f, [key]: value }));
 
@@ -106,9 +110,14 @@ function SettingsForm({ initial }: { initial: Settings }) {
         <Row label="Isabgol delay" unit="min later">
           <input inputMode="numeric" className={field} value={form.isabgol_delay_min} onChange={(e) => set("isabgol_delay_min", Number(e.target.value) || 0)} />
         </Row>
-        <Row label="Time zone">
-          <input className="w-44 bg-transparent text-right text-[15px] text-ink-2 outline-none" value={form.tz} onChange={(e) => set("tz", e.target.value)} />
-        </Row>
+        <button type="button" onClick={() => setTzOpen(true)} className="flex min-h-[52px] w-full items-center gap-3 px-4 py-2 text-left">
+          <span className="flex-1 text-[17px]">Time zone</span>
+          <span className="min-w-0 text-right">
+            <span className="block truncate text-[15px]">{zoneLabel(form.tz).name}</span>
+            <span className="block text-[13px] text-ink-3">{zoneLabel(form.tz).offset}</span>
+          </span>
+          <ChevronRightIcon className="size-4 shrink-0 text-ink-3" />
+        </button>
       </Group>
 
       <Group title="Weekly classes" note="Your class days, so rest days never count against you.">
@@ -178,12 +187,37 @@ function SettingsForm({ initial }: { initial: Settings }) {
         </div>
       ) : null}
 
+      <Group title="Coach" note="The coach reads your notes and the patterns from your logs before it answers.">
+        <NavRow href="/memory" Icon={BookIcon} label="What Temple knows about you" />
+        <NavRow href="/insights" Icon={ChartIcon} label="Your patterns" />
+      </Group>
+
       <Group title="Privacy" note="Photos are shrunk on the phone before upload, which removes location and device details. The AI providers used do not train on your data.">
         <button type="button" onClick={() => void signOut()} className="pressable flex h-12 w-full items-center px-4 text-[17px] font-medium text-care">
           Sign out and clear this phone
         </button>
       </Group>
+      {tzOpen ? (
+        <TimeZoneSheet
+          value={form.tz}
+          onPick={(tz) => {
+            set("tz", tz);
+            setTzOpen(false);
+          }}
+          onClose={() => setTzOpen(false)}
+        />
+      ) : null}
     </main>
+  );
+}
+
+function NavRow({ href, Icon, label }: { href: string; Icon: typeof BookIcon; label: string }) {
+  return (
+    <Link href={href} className="pressable flex min-h-[52px] items-center gap-3 px-4">
+      <Icon className="size-5 shrink-0 text-brand" />
+      <span className="flex-1 text-[17px]">{label}</span>
+      <ChevronRightIcon className="size-4 shrink-0 text-ink-3" />
+    </Link>
   );
 }
 

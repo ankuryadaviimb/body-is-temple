@@ -1,9 +1,15 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useSyncExternalStore } from "react";
+import { createPortal } from "react-dom";
 import { CloseIcon } from "./icons";
 
-/** iOS-style bottom sheet. Closes on backdrop tap or Escape. */
+const noop = () => () => {};
+
+/**
+ * iOS-style bottom sheet. Closes on backdrop tap or Escape. Rendered into <body> so no
+ * transformed or clipped parent can trap it under the tab bar.
+ */
 export function Sheet({
   open,
   title,
@@ -22,8 +28,9 @@ export function Sheet({
     return () => window.removeEventListener("keydown", onKey);
   }, [open, onClose]);
 
-  if (!open) return null;
-  return (
+  const onClient = useSyncExternalStore(noop, () => true, () => false);
+  if (!open || !onClient) return null;
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-end justify-center" role="dialog" aria-modal="true" aria-label={title}>
       <button type="button" aria-label="Close" className="fade-in absolute inset-0 bg-black/50 backdrop-blur-[2px]" onClick={onClose} />
       <div className="sheet-enter pb-safe relative w-full max-w-md rounded-t-[28px] border-t border-line bg-surface px-5 pt-2.5 shadow-2xl">
@@ -36,7 +43,8 @@ export function Sheet({
         </div>
         <div className="max-h-[72dvh] overflow-y-auto pb-5">{children}</div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 

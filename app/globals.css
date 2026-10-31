@@ -160,8 +160,10 @@ a {
   transition-duration: 0.6s;
 }
 
+/* "backwards", not "both": a transform kept after the animation would trap fixed
+   children (sheets, the save bar) inside the screen instead of the viewport. */
 .fade-in {
-  animation: fade-in 260ms ease-out both;
+  animation: fade-in 260ms ease-out backwards;
 }
 @keyframes fade-in {
   from {

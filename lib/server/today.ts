@@ -8,6 +8,7 @@ import type { TodaySnapshot } from "@/lib/domain/snapshot";
 import { computeStreak, isOnTrack } from "@/lib/domain/streak";
 import { addDays, daysBetween, localParts, localToInstant } from "@/lib/domain/time";
 import type { AuthedContext } from "@/lib/supabase/server";
+import { getCoachCard } from "./coach-card";
 import { anchorsBetween, listEvents } from "./events";
 import { loadSettings, saveSettings } from "./settings";
 
@@ -34,7 +35,10 @@ function groupByDay(events: StoredEvent[]): Map<string, StoredEvent[]> {
   return map;
 }
 
-export async function buildToday(ctx: AuthedContext): Promise<TodaySnapshot> {
+/** Yesterday needs this many logs before an AI morning card is worth writing. */
+const CARD_MIN_EVENTS = 3;
+
+export async function buildToday(ctx: AuthedContext): Promise<{ snapshot: TodaySnapshot; needsCard: boolean }> {
   let settings = await loadSettings(ctx);
   const today = await currentDay(ctx, settings);
   const from = addDays(today, -(HISTORY_DAYS - 1));
@@ -66,12 +70,19 @@ export async function buildToday(ctx: AuthedContext): Promise<TodaySnapshot> {
     .map((d) => ofKind(byDay.get(d) ?? [], "toilet").length);
 
   const yesterday = addDays(today, -1);
+  const card = await getCoachCard(ctx, today);
+  const needsCard = card.status === "none" && (byDay.get(yesterday) ?? []).length >= CARD_MIN_EVENTS;
   return {
-    today,
-    settings,
-    events: [...(byDay.get(yesterday) ?? []), ...(byDay.get(today) ?? [])],
-    streak,
-    ladder: { index: state.index, heldInWindow: state.heldInWindow, startedOn: state.startedOn },
-    recentVisitCounts,
+    snapshot: {
+      today,
+      settings,
+      events: [...(byDay.get(yesterday) ?? []), ...(byDay.get(today) ?? [])],
+      streak,
+      ladder: { index: state.index, heldInWindow: state.heldInWindow, startedOn: state.startedOn },
+      recentVisitCounts,
+      coachCard: card.card,
+      coachCardPending: needsCard || card.status === "pending",
+    },
+    needsCard,
   };
 }

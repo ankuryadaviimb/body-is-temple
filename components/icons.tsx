@@ -203,3 +203,49 @@ export const AlertIcon = (p: IconProps) => (
     <path d="M12 10v4M12 17h.01" />
   </Svg>
 );
+export const ChatIcon = (p: IconProps) => (
+  <Svg {...p}>
+    <path d="M5 4.5h14a2 2 0 0 1 2 2V15a2 2 0 0 1-2 2h-7l-4.5 3.5V17H5a2 2 0 0 1-2-2V6.5a2 2 0 0 1 2-2z" />
+    <path d="M8.5 11h.01M12 11h.01M15.5 11h.01" strokeWidth="2.6" />
+  </Svg>
+);
+export const SparkIcon = (p: IconProps) => (
+  <Svg {...p}>
+    <path d="M12 3.5l1.9 5.3 5.3 1.9-5.3 1.9L12 17.9l-1.9-5.3-5.3-1.9 5.3-1.9z" />
+    <path d="M18.5 16.5l.6 1.6 1.6.6-1.6.6-.6 1.6-.6-1.6-1.6-.6 1.6-.6z" />
+  </Svg>
+);
+export const ChartIcon = (p: IconProps) => (
+  <Svg {...p}>
+    <path d="M5 19v-7M10 19V6M15 19v-5M20 19V9" />
+  </Svg>
+);
+export const BookIcon = (p: IconProps) => (
+  <Svg {...p}>
+    <path d="M5 5.5A2.5 2.5 0 0 1 7.5 3H19v14.5H7.5A2.5 2.5 0 0 0 5 20z" />
+    <path d="M5 20a1.5 1.5 0 0 0 1.5 1H19v-3.5" />
+  </Svg>
+);
+export const SendIcon = (p: IconProps) => (
+  <Svg {...p}>
+    <path d="M12 19V5.5M6.5 11L12 5.5l5.5 5.5" />
+  </Svg>
+);
+export const SearchIcon = (p: IconProps) => (
+  <Svg {...p}>
+    <circle cx="11" cy="11" r="6.5" />
+    <path d="M20 20l-4.2-4.2" />
+  </Svg>
+);
+export const GlobeIcon = (p: IconProps) => (
+  <Svg {...p}>
+    <circle cx="12" cy="12" r="8.5" />
+    <path d="M3.5 12h17M12 3.5c2.4 2.6 3.5 5.4 3.5 8.5s-1.1 5.9-3.5 8.5c-2.4-2.6-3.5-5.4-3.5-8.5s1.1-5.9 3.5-8.5z" />
+  </Svg>
+);
+export const PencilIcon = (p: IconProps) => (
+  <Svg {...p}>
+    <path d="M4 20h4L19 9l-4-4L4 16z" />
+    <path d="M13 7l4 4" />
+  </Svg>
+);

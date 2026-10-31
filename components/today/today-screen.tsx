@@ -12,6 +12,7 @@ import { mainMeals, ofKind, waterMl } from "@/lib/domain/day";
 import { mealAnalysisOf, payloadOf } from "@/lib/domain/events";
 import { buildMorningCard, LADDER } from "@/lib/domain/ladder";
 import { computeRings } from "@/lib/domain/rings";
+import { nextUp } from "@/lib/domain/next-up";
 import { feedbackFor } from "@/lib/domain/rules-feedback";
 import { addDays, localParts, minutesBetween } from "@/lib/domain/time";
 import {
@@ -30,11 +31,16 @@ import {
   WalkIcon,
   WindIcon,
 } from "../icons";
-import { Choice, Sheet } from "../sheet";
+import { Sheet } from "../sheet";
+import { TriageSheet } from "../coach/triage-sheet";
+import { GasSheet } from "../gas-sheet";
 import { useToast } from "../toast";
+import { AskCard } from "./ask-card";
+import { CoachCardView } from "./coach-card";
 import { MealTile } from "./meal-button";
 import { MorningCardView } from "./morning-card";
 import { MoreSheet } from "./more-sheet";
+import { NextUpCard } from "./next-up-card";
 import { CornerPill, ProgressBar, RailButton, SectionTitle, Tile } from "./quick-tiles";
 import { RingsHero } from "./rings-hero";
 import { Timeline } from "./timeline";
@@ -72,6 +78,7 @@ export function TodayScreen() {
   const [gasOpen, setGasOpen] = useState(false);
   const [teaOpen, setTeaOpen] = useState(false);
   const [moodFor, setMoodFor] = useState<string | null>(null);
+  const [triageOpen, setTriageOpen] = useState(false);
 
   const events = useMemo(() => rawEvents?.filter((e) => !pendingDeletes.has(e.id)), [rawEvents, pendingDeletes]);
   const ladderIndex = snapshot?.ladder.index ?? 0;
@@ -160,6 +167,10 @@ export function TodayScreen() {
     logged(result, "Wake-up time logged.");
   }
 
+  const nudge = nextUp(events, settings, new Date(), ladderStep.id);
+  const coachCard = snapshot?.coachCard && snapshot.coachCard.day === today ? snapshot.coachCard : null;
+  const morning = nowMinutes < 12 * 60 && nowMinutes >= settings.day_start_hour * 60;
+
   const streak = snapshot?.streak;
   const showMood = moodFor !== null && events.some((e) => e.id === moodFor);
 
@@ -229,6 +240,10 @@ export function TodayScreen() {
 
       <RingsHero rings={rings} />
 
+      {nudge ? <NextUpCard nudge={nudge} /> : null}
+
+      {coachCard && morning ? <CoachCardView card={coachCard} /> : null}
+
       {streak?.atRisk ? (
         <p className="-mt-2 rounded-2xl bg-tip/10 px-4 py-3 text-sm leading-relaxed">
           Yesterday was a miss, and that is fine. One log today keeps your streak going.
@@ -289,10 +304,28 @@ export function TodayScreen() {
         </div>
       </section>
 
+      {coachCard && !morning ? <CoachCardView card={coachCard} /> : null}
+
       <MorningCardView card={card} />
+
+      <AskCard />
 
       <section aria-label="Feeling off">
         <SectionTitle>Feeling off?</SectionTitle>
+        <button
+          type="button"
+          onClick={() => setTriageOpen(true)}
+          className="pressable mb-3 flex w-full items-center gap-3 rounded-[22px] bg-surface p-3.5 text-left shadow-card"
+        >
+          <span className="flex size-10 shrink-0 items-center justify-center rounded-2xl bg-gut/15 text-gut">
+            <SeatIcon className="size-5" />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-[15px] font-semibold leading-tight">Feel the urge? Should I go?</span>
+            <span className="block text-xs text-ink-3">Two taps, an instant answer</span>
+          </span>
+          <ChevronRightIcon className="size-4 shrink-0 text-ink-3" />
+        </button>
         <div className="grid grid-cols-2 gap-3">
           <ResetCard href="/reset/heavy" title="Feeling heavy" sub="2-minute reset" icon={<FeatherIcon className="size-5" />} />
           <ResetCard href="/reset/gas" title="Gas or bloating" sub="2-minute relief" icon={<WindIcon className="size-5" />} />
@@ -320,6 +353,7 @@ export function TodayScreen() {
 
       <MoreSheet open={moreOpen} onClose={() => setMoreOpen(false)} />
       <GasSheet open={gasOpen} onClose={() => setGasOpen(false)} />
+      <TriageSheet open={triageOpen} onClose={() => setTriageOpen(false)} />
       <Sheet open={teaOpen} title="Which cup?" onClose={() => setTeaOpen(false)}>
         <p className="mb-4 text-sm leading-relaxed text-ink-2">Logs this cup now and makes it your usual, so one tap on Tea logs it next time.</p>
         <div className="flex flex-col gap-2">
@@ -387,28 +421,5 @@ function TodaySkeleton() {
         ))}
       </div>
     </main>
-  );
-}
-
-function GasSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const { logged } = useToast();
-  return (
-    <Sheet open={open} title="How gassy do you feel?" onClose={onClose}>
-      <Choice
-        label="0 is none, 4 is very bloated"
-        value={undefined}
-        onChange={async (level: number) => {
-          onClose();
-          logged(await logEvent("gas", { level }), `Gas ${level} of 4 logged.`);
-        }}
-        options={[
-          { value: 0, label: "0 · None" },
-          { value: 1, label: "1" },
-          { value: 2, label: "2" },
-          { value: 3, label: "3" },
-          { value: 4, label: "4 · Very" },
-        ]}
-      />
-    </Sheet>
   );
 }

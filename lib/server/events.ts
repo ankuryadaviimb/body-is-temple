@@ -137,18 +137,33 @@ export async function getEvents(ctx: AuthedContext, ids: string[]): Promise<Stor
   return (data ?? []) as StoredEvent[];
 }
 
+/** Rows per page. The database API returns at most 1,000 rows per request. */
+const PAGE = 1000;
+const MAX_PAGES = 10;
+
+/**
+ * Events for a range of logical days, oldest first. Reads page by page, because one
+ * request is capped at 1,000 rows and a capped read would silently drop the newest days.
+ */
 export async function listEvents(ctx: AuthedContext, fromDay: string, toDay: string): Promise<StoredEvent[]> {
-  const { data, error } = await ctx.supabase
-    .from("events")
-    .select(COLUMNS)
-    .eq("user_id", ctx.userId)
-    .gte("logical_day", fromDay)
-    .lte("logical_day", toDay)
-    .is("deleted_at", null)
-    .order("occurred_at")
-    .limit(5000);
-  if (error) throw new Error("event_read_failed");
-  return (data ?? []) as StoredEvent[];
+  const all: StoredEvent[] = [];
+  for (let page = 0; page < MAX_PAGES; page++) {
+    const { data, error } = await ctx.supabase
+      .from("events")
+      .select(COLUMNS)
+      .eq("user_id", ctx.userId)
+      .gte("logical_day", fromDay)
+      .lte("logical_day", toDay)
+      .is("deleted_at", null)
+      .order("occurred_at")
+      .order("id")
+      .range(page * PAGE, page * PAGE + PAGE - 1);
+    if (error) throw new Error("event_read_failed");
+    const rows = (data ?? []) as StoredEvent[];
+    all.push(...rows);
+    if (rows.length < PAGE) break;
+  }
+  return all;
 }
 
 /** Recomputes logical days for events between local midnight and noon on one date. */

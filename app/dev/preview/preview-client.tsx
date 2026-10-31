@@ -2,6 +2,9 @@
 
 import { useEffect, useState } from "react";
 import { BottomNav } from "@/components/bottom-nav";
+import { CoachScreen } from "@/components/coach/coach-screen";
+import { InsightsScreen } from "@/components/insights/insights-screen";
+import { MemoryScreen } from "@/components/memory/memory-screen";
 import { HistoryScreen } from "@/components/history/history-screen";
 import { PracticeSession } from "@/components/practice/practice-session";
 import { ResetRoutineView } from "@/components/reset/reset-routine";
@@ -11,7 +14,10 @@ import { TodayScreen } from "@/components/today/today-screen";
 import { ToiletSession } from "@/components/toilet/toilet-session";
 import { db, kvSet, type LocalEvent } from "@/lib/client/db";
 import { RESETS } from "@/lib/content/resets";
+import type { CoachMessage } from "@/lib/domain/coach/message";
 import type { EventKind } from "@/lib/domain/events";
+import type { MemoryFile } from "@/lib/domain/memory";
+import type { ToleranceReport } from "@/lib/domain/tolerance";
 import { logicalDayFor } from "@/lib/domain/logical-day";
 import { DEFAULT_SETTINGS } from "@/lib/domain/settings";
 import type { CachedSnapshot } from "@/lib/domain/snapshot";
@@ -88,9 +94,134 @@ async function seed() {
     recentVisitCounts: [3, 3, 2, 3],
     fetchedAt: Date.now(),
   };
-  await kvSet("snapshot", snapshot);
+  await kvSet("snapshot", { ...snapshot, coachCard: SAMPLE_CARD(today), coachCardPending: false });
   await kvSet("tz_adopted", true);
+  await kvSet("coach_messages", SAMPLE_MESSAGES(today));
+  await kvSet("insights", { report: SAMPLE_REPORT, windowDays: 90, fetchedAt: Date.now() });
+  await kvSet("memory", SAMPLE_MEMORY);
 }
+
+const SAMPLE_CARD = (day: string) => ({
+  day,
+  provider: "sample",
+  headline: "A lighter day yesterday, and a calmer night",
+  went_well: ["Isabgol on time, 95 minutes after dinner", "A 10-minute walk after lunch"],
+  to_fix: "Two rounds this morning with some breath holding. Breathe out on every push.",
+  one_thing: "Stop at 2 rounds. If the pull comes back, do the 2-minute reset first.",
+  class_tip: "Class at 7 AM: sip water before, and breathe out on every effort.",
+});
+
+const SAMPLE_MESSAGES = (day: string): CoachMessage[] => [
+  {
+    id: "00000000-0000-4000-8000-00000000c001",
+    created_at: new Date(Date.now() - 5 * 60_000).toISOString(),
+    logical_day: day,
+    intent: "gas",
+    question: "Why do I feel so gassy?",
+    quick: null,
+    answer: {
+      headline: "Most likely yesterday's poori and chana lunch, with a late Isabgol",
+      why: [
+        "Poori and chana masala at lunch yesterday (1:30 PM): beans plus fried food, a common gas maker.",
+        "Your logs: gas 3.1 vs 1.4 on days with chana (6 days with, 9 without).",
+        "No walk after lunch yesterday.",
+      ],
+      good: ["Today's lunch was gentle: roti, moong dal and raita"],
+      now: ["Walk for 10 minutes.", "Then knees to chest or hips up for 2 minutes."],
+      watch: ["Tonight's gas level, so Temple can confirm the chana pattern."],
+      doctor: null,
+      actions: ["log_walk", "reset_gas", "log_gas"],
+      remember: ["Chana at lunch gives me gas by evening"],
+      confidence: "medium",
+    },
+    status: "done",
+    provider: "sample",
+  },
+  {
+    id: "00000000-0000-4000-8000-00000000c002",
+    created_at: new Date(Date.now() - 26 * 3_600_000).toISOString(),
+    logical_day: addDays(day, -1),
+    intent: "dinner",
+    question: "What should I eat for dinner tonight?",
+    quick: null,
+    answer: {
+      headline: "Keep dinner light tonight",
+      why: ["You already had poori and chana at lunch."],
+      good: [],
+      now: ["Moong dal khichdi with curd", "Roti with lauki sabzi", "Curd rice"],
+      watch: ["Finish by 10:00 PM, then Isabgol about 90 minutes later."],
+      doctor: null,
+      actions: [],
+      remember: [],
+      confidence: "medium",
+    },
+    status: "done",
+    provider: "sample",
+  },
+];
+
+const SAMPLE_REPORT: ToleranceReport = {
+  daysLogged: 24,
+  daysWithMeals: 21,
+  findings: [
+    {
+      exposure: { key: "food:chana", label: "Chana", kind: "food" },
+      outcome: "evening_gas",
+      withDays: 6,
+      withoutDays: 9,
+      withMean: 3.1,
+      withoutMean: 1.4,
+      diff: 1.7,
+      effect: "worse",
+      strength: "early",
+    },
+    {
+      exposure: { key: "food:chana", label: "Chana", kind: "food" },
+      outcome: "next_rounds",
+      withDays: 6,
+      withoutDays: 9,
+      withMean: 2.8,
+      withoutMean: 2.1,
+      diff: 0.7,
+      effect: "worse",
+      strength: "early",
+    },
+    {
+      exposure: { key: "habit:isabgol_late", label: "Isabgol over 2.5 h after dinner", kind: "habit" },
+      outcome: "next_smooth",
+      withDays: 8,
+      withoutDays: 7,
+      withMean: 0.25,
+      withoutMean: 0.57,
+      diff: -0.32,
+      effect: "worse",
+      strength: "early",
+    },
+    {
+      exposure: { key: "habit:walk_after_meal", label: "Walk after a meal", kind: "habit" },
+      outcome: "evening_gas",
+      withDays: 10,
+      withoutDays: 11,
+      withMean: 1.3,
+      withoutMean: 2.4,
+      diff: -1.1,
+      effect: "better",
+      strength: "steady",
+    },
+  ],
+  learning: [
+    { exposure: { key: "food:peanuts", label: "Peanuts", kind: "food" }, withDays: 3, withoutDays: 18 },
+    { exposure: { key: "food:poori", label: "Poori", kind: "food" }, withDays: 2, withoutDays: 19 },
+    { exposure: { key: "tag:raw_night", label: "Raw salad at night", kind: "tag" }, withDays: 1, withoutDays: 20 },
+  ],
+  outcomeDays: { evening_gas: 15, next_rounds: 20, next_smooth: 17, heavy: 21 },
+};
+
+const SAMPLE_MEMORY: MemoryFile[] = [
+  { slug: "profile", content: "- Sample note: usually 2 to 3 morning rounds.\n- Sample note: a heavy feeling some afternoons.", version: 1, updated_at: new Date().toISOString() },
+  { slug: "gut", content: "- Feet on a stool, breathe out on every push.\n- 5 minutes at most.\n- Isabgol about 90 minutes after dinner.", version: 2, updated_at: new Date().toISOString() },
+  { slug: "foods", content: "- Idea to test: chana and fried food at the same meal.", version: 1, updated_at: new Date().toISOString() },
+];
 
 export function PreviewClient({ screen }: { screen: string }) {
   const [ready, setReady] = useState(false);
@@ -109,6 +240,12 @@ export function PreviewClient({ screen }: { screen: string }) {
       <HistoryScreen />
     ) : screen === "settings" ? (
       <SettingsScreen />
+    ) : screen === "coach" ? (
+      <CoachScreen />
+    ) : screen === "insights" ? (
+      <InsightsScreen />
+    ) : screen === "memory" ? (
+      <MemoryScreen />
     ) : (
       <TodayScreen />
     );

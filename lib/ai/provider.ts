@@ -93,7 +93,7 @@ export async function chat(
   }
   const model = cfg.models[task];
   const body: Record<string, unknown> = {
-    ...extraBody(provider),
+    ...extraBody(provider, task),
     model,
     messages,
     max_tokens: opts.maxTokens ?? 800,

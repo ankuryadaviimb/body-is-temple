@@ -98,3 +98,75 @@ export function isValidTimeZone(tz: string): boolean {
     return false;
   }
 }
+
+export type ZoneLabel = {
+  /** IANA id, for example "Asia/Kolkata". Stored, but rarely shown. */
+  id: string;
+  /** Standard name, for example "India Standard Time". */
+  name: string;
+  /** Offset from GMT, for example "GMT+5:30". */
+  offset: string;
+  /** City part of the id, for example "Kolkata". */
+  city: string;
+};
+
+function zonePart(tz: string, at: Date, style: "long" | "shortOffset"): string | null {
+  try {
+    const parts = new Intl.DateTimeFormat("en-US", { timeZone: tz, timeZoneName: style }).formatToParts(at);
+    return parts.find((p) => p.type === "timeZoneName")?.value ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/** Offset computed by hand, for engines without the "shortOffset" style. */
+function computedOffset(tz: string, at: Date): string {
+  const local = localParts(at, tz);
+  const utc = localParts(at, "UTC");
+  const diff = daysBetween(utc.date, local.date) * 1440 + (local.minutes - utc.minutes);
+  const abs = Math.abs(diff);
+  const minutes = abs % 60;
+  return `GMT${diff < 0 ? "-" : "+"}${Math.floor(abs / 60)}${minutes ? `:${String(minutes).padStart(2, "0")}` : ""}`;
+}
+
+/** Friendly label for a time zone: "India Standard Time" and "GMT+5:30" instead of "Asia/Kolkata". */
+export function zoneLabel(tz: string, at: Date = new Date()): ZoneLabel {
+  const city = (tz.split("/").at(-1) ?? tz).replaceAll("_", " ");
+  if (!isValidTimeZone(tz)) return { id: tz, name: tz, offset: "", city };
+  let offset = zonePart(tz, at, "shortOffset") ?? computedOffset(tz, at);
+  if (offset === "GMT" || offset === "UTC") offset = "GMT+0";
+  const name = zonePart(tz, at, "long") ?? offset;
+  return { id: tz, name, offset, city };
+}
+
+/** "India Standard Time (GMT+5:30)". */
+export function zoneDisplay(tz: string, at: Date = new Date()): string {
+  const z = zoneLabel(tz, at);
+  return z.offset && z.offset !== z.name ? `${z.name} (${z.offset})` : z.name;
+}
+
+const COMMON_ZONES = [
+  "Asia/Kolkata",
+  "Asia/Dubai",
+  "Asia/Singapore",
+  "Asia/Tokyo",
+  "Europe/London",
+  "Europe/Berlin",
+  "America/New_York",
+  "America/Chicago",
+  "America/Los_Angeles",
+  "Australia/Sydney",
+  "UTC",
+];
+
+/** Every time zone the device knows, for the picker (common ones if the list is unavailable). */
+export function allTimeZones(): string[] {
+  const intl = Intl as typeof Intl & { supportedValuesOf?: (key: "timeZone") => string[] };
+  try {
+    const list = intl.supportedValuesOf?.("timeZone");
+    if (list && list.length > 0) return [...new Set([...list, "UTC"])];
+  } catch {
+    // Fall through to the short list.
+  }
+  return COMMON_ZONES;
+}

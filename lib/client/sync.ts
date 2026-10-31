@@ -159,10 +159,13 @@ export async function refreshFromServer(): Promise<TodaySnapshot | null> {
       streak: snap.streak,
       ladder: snap.ladder,
       recentVisitCounts: snap.recentVisitCounts,
+      coachCard: snap.coachCard ?? null,
+      coachCardPending: snap.coachCardPending ?? false,
       fetchedAt: Date.now(),
     };
     await kvSet("snapshot", cached);
     emit({ online: true });
+    if (snap.coachCardPending) pollForCard(snap.today);
     if (await adoptDeviceTimeZone(snap)) return refreshFromServer();
     return snap;
   } catch (err) {
@@ -187,6 +190,15 @@ async function adoptDeviceTimeZone(snap: TodaySnapshot): Promise<boolean> {
     await kvSet("tz_adopted", false);
     return false;
   }
+}
+
+let cardPollDay: string | null = null;
+
+/** The morning card is written in the background; check back twice (once per day). */
+function pollForCard(day: string) {
+  if (cardPollDay === day) return;
+  cardPollDay = day;
+  for (const delay of [8_000, 25_000]) setTimeout(() => void refreshFromServer(), delay);
 }
 
 /** Refreshes a few times while meal analyses are still running on the server. */

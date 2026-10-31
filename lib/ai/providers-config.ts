@@ -21,10 +21,12 @@ export function endpointFor(provider: ProviderId, cloudflareAccountId?: string):
 /**
  * Extra request fields per provider. Gemma 4 on Cloudflare "thinks" by default, which
  * took about 20 s per meal and could use the whole token budget; turning it off brings
- * replies to about 1 s with the same JSON.
+ * replies to about 1 s with the same JSON. On Groq, the text model (gpt-oss) reasons
+ * before answering; "low" keeps coach replies fast and inside the token budget.
  */
-export function extraBody(provider: ProviderId): Record<string, unknown> {
+export function extraBody(provider: ProviderId, task?: TaskKind): Record<string, unknown> {
   if (provider === "cloudflare") return { chat_template_kwargs: { enable_thinking: false } };
+  if (provider === "groq" && task === "text") return { reasoning_effort: "low" };
   return {};
 }
 
