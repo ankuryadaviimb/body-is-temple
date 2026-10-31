@@ -15,7 +15,7 @@ It is designed around one rule: logging must take seconds, or people stop doing 
 
 - **You run your own copy.** Each person deploys their own copy on their own free accounts. Nobody else's database is ever involved.
 - **This repository contains code only.** Personal data (logs, photos, reports, memory notes) lives in your own Supabase project and on your phone. These stay out of git: `private/`, `.env*` (except `.env.example`), PDFs and exports.
-- **The browser never talks to the database.** Every query runs on the server as the signed-in user, under row-level security. The session is an HttpOnly cookie, and only the emails in `ALLOWED_EMAILS` can sign in.
+- **The browser never talks to the database.** Every query runs on the server as the signed-in user, under row-level security. The session is an HttpOnly cookie, and only the emails in `ALLOWED_EMAILS` can create an account or sign in (email and password, 12 characters minimum, email confirmed once).
 - **Photos stay private.** They are shrunk and re-encoded on the phone before upload, which removes location and device details. They live in a private storage bucket and are served only to their owner.
 - **AI providers do not train on your data:**
   - Cloudflare Workers AI (main) states it does not train on, or keep, inputs and outputs.
@@ -32,7 +32,7 @@ Everything runs on free plans: Vercel Hobby, Supabase Free, Cloudflare Workers A
 
 1. **Supabase** (free): create a project, in the region nearest you.
    - Open the SQL editor and run `supabase/migrations/0001_init.sql`.
-   - Under Authentication, then Email Templates, edit the Magic Link template so it shows the code: `Your code is {{ .Token }}`. The app signs in with a 6-digit code typed inside the app, because on iOS a magic link would open in Safari, which keeps separate cookies.
+   - Under Authentication, then URL Configuration, set the Site URL to `https://<your-app>/login`.
    - Copy the project URL and anon key from Project Settings, then API.
    - After your first sign-in, turn off "Allow new users to sign up".
 2. **Cloudflare** (free): create an API token with the Workers AI permission, and note your account id.
@@ -40,7 +40,7 @@ Everything runs on free plans: Vercel Hobby, Supabase Free, Cloudflare Workers A
 4. **Vercel** (Hobby, free): import this repository, or run `npx vercel` from a clone.
    - Add the environment variables listed in `.env.example`.
    - Set `APP_ORIGIN` to your deployment URL.
-5. **iPhone:** open your deployment in Safari, tap Share, then Add to Home Screen. Open the app from the Home Screen and sign in with the emailed code.
+5. **iPhone:** open your deployment in Safari, tap Share, then Add to Home Screen. Open the app from the Home Screen, tap "Create your account", confirm the email link once (any browser), then sign in. iPhone saves the password to Keychain.
 
 ## Development
 
