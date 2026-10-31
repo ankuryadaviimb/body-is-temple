@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useDayEvents, useSettings, useSnapshot, useSyncState, useToday } from "@/lib/client/hooks";
-import { logEvent, updateEvent } from "@/lib/client/log";
+import { dayEvents, logEvent, updateEvent } from "@/lib/client/log";
 import { ofKind } from "@/lib/domain/day";
 import { mealAnalysisOf } from "@/lib/domain/events";
 import { buildMorningCard, LADDER } from "@/lib/domain/ladder";
@@ -35,7 +35,7 @@ export function TodayScreen() {
   const sync = useSyncState();
   const events = useDayEvents(today);
   const yesterdayEvents = useDayEvents(today ? addDays(today, -1) : undefined);
-  const { show, showFeedback } = useToast();
+  const { showFeedback, logged } = useToast();
   const [moreOpen, setMoreOpen] = useState(false);
   const [gasOpen, setGasOpen] = useState(false);
   const [moodFor, setMoodFor] = useState<string | null>(null);
@@ -104,24 +104,25 @@ export function TodayScreen() {
             : kind === "walk"
               ? await logEvent("walk", { minutes: 10 })
               : await logEvent("isabgol", { tsp: 1, water_ml: 200 });
+    const sameKind = (await dayEvents(result.event.logical_day)).filter((e) => e.kind === result.event.kind).length;
     const fallback: Record<typeof kind, string> = {
-      water: "Water logged.",
+      water: `Water logged · ${sameKind * 250} ml today`,
       tea: "Small cup of tea logged.",
       amla: "Amla logged.",
-      walk: "Walk logged.",
+      walk: "10-minute walk logged.",
       isabgol: "Isabgol logged.",
     };
-    showFeedback(result.feedback, fallback[kind]);
+    logged(result, fallback[kind]);
   }
 
   async function goodMorning() {
-    const { event } = await logEvent("wake", {});
-    setMoodFor(event.id);
+    const result = await logEvent("wake", {});
+    setMoodFor(result.event.id);
+    logged(result, "Good morning logged.");
   }
 
   async function goodNight() {
-    await logEvent("sleep", {});
-    show("Good night. Sleep well.", "info");
+    logged(await logEvent("sleep", {}), "Good night. Sleep well.");
   }
 
   const streak = snapshot?.streak;
@@ -155,7 +156,7 @@ export function TodayScreen() {
         </button>
       ) : null}
 
-      {moodFor ? (
+      {moodFor && events.some((e) => e.id === moodFor) ? (
         <div className="rounded-2xl bg-surface p-4 shadow-sm">
           <p className="mb-2 text-sm font-medium">How do you feel this morning? (optional)</p>
           <div className="flex gap-2">
@@ -265,15 +266,14 @@ function Chip({ label, icon, onClick, href }: { label: string; icon?: React.Reac
 }
 
 function GasSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const { showFeedback } = useToast();
+  const { logged } = useToast();
   return (
     <Sheet open={open} title="How gassy do you feel?" onClose={onClose}>
       <Choice
         label="0 is none, 4 is very bloated"
         value={undefined}
         onChange={async (level: number) => {
-          const { feedback } = await logEvent("gas", { level });
-          showFeedback(feedback, "Saved.");
+          logged(await logEvent("gas", { level }), `Gas ${level} of 4 logged.`);
           onClose();
         }}
         options={[0, 1, 2, 3, 4].map((v) => ({ value: v, label: String(v) }))}

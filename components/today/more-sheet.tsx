@@ -14,7 +14,7 @@ export function MoreSheet({ open, onClose }: { open: boolean; onClose: () => voi
   const [num, setNum] = useState<string>("");
   const [level, setLevel] = useState<number | undefined>(undefined);
   const [symptom, setSymptom] = useState<"bleeding" | "pain" | "fissure" | "other" | undefined>(undefined);
-  const { show, showFeedback } = useToast();
+  const { logged } = useToast();
 
   function close() {
     setPanel("menu");
@@ -26,35 +26,28 @@ export function MoreSheet({ open, onClose }: { open: boolean; onClose: () => voi
   }
 
   async function quick(kind: "intimacy" | "late_work") {
-    await logEvent(kind, {});
-    show(kind === "intimacy" ? "Logged privately." : "Logged. Late nights often show up in the next morning.", "info");
+    logged(await logEvent(kind, {}), kind === "intimacy" ? "Logged privately." : "Logged. Late nights often show up in the next morning.");
     close();
   }
 
   async function submit() {
     if (panel === "meal_text" && text.trim()) {
-      const { feedback } = await logEvent("meal", { text: text.trim().slice(0, 500) });
-      showFeedback(feedback, "Meal saved. Details appear in a few seconds.");
+      logged(await logEvent("meal", { text: text.trim().slice(0, 500) }), "Meal saved. Details appear in a few seconds.");
     } else if (panel === "weight" && Number(num) >= 25) {
-      await logEvent("weigh_in", { kg: Math.round(Number(num) * 10) / 10 });
-      show("Weight saved.", "info");
+      logged(await logEvent("weigh_in", { kg: Math.round(Number(num) * 10) / 10 }), "Weight saved.");
     } else if ((panel === "mood" || panel === "stress") && level) {
-      await logEvent(panel, { level });
-      show("Saved.", "info");
+      logged(await logEvent(panel, { level }), "Saved.");
     } else if (panel === "symptom" && symptom) {
-      const { feedback } = await logEvent("symptom", { type: symptom, ...(text.trim() ? { text: text.trim().slice(0, 500) } : {}) });
-      showFeedback(
-        feedback,
+      logged(
+        await logEvent("symptom", { type: symptom, ...(text.trim() ? { text: text.trim().slice(0, 500) } : {}) }),
         symptom === "bleeding"
           ? "Saved. If bleeding is more than streaks or keeps happening, please see your doctor."
           : "Saved.",
       );
     } else if (panel === "note" && text.trim()) {
-      await logEvent("note", { text: text.trim().slice(0, 1000) });
-      show("Note saved.", "info");
+      logged(await logEvent("note", { text: text.trim().slice(0, 1000) }), "Note saved.");
     } else if (panel === "workout" && text.trim() && Number(num) > 0) {
-      await logEvent("workout", { type: text.trim().slice(0, 60), duration_min: Math.round(Number(num)) });
-      show("Workout saved.", "good");
+      logged(await logEvent("workout", { type: text.trim().slice(0, 60), duration_min: Math.round(Number(num)) }), "Workout saved.");
     } else {
       return;
     }

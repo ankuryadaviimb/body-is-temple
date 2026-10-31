@@ -15,7 +15,7 @@ export function MealButtons() {
   const camera = useRef<HTMLInputElement>(null);
   const library = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
-  const { show, showFeedback } = useToast();
+  const { show, logged } = useToast();
 
   async function handle(files: FileList | null, fromCamera: boolean) {
     if (!files || files.length === 0) return;
@@ -23,8 +23,7 @@ export function MealButtons() {
     try {
       for (const file of Array.from(files).slice(0, 6)) {
         const { blob, takenAt } = await prepareMealPhoto(file, fromCamera);
-        const { feedback } = await logEvent("meal", {}, { at: takenAt ?? new Date(), photo: blob });
-        showFeedback(feedback, "Meal saved. Details appear in a few seconds.");
+        logged(await logEvent("meal", {}, { at: takenAt ?? new Date(), photo: blob }), "Meal saved. Details appear in a few seconds.");
       }
     } catch {
       show("Could not read that photo. Try again, or describe the meal from More.", "tip");

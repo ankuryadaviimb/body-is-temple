@@ -1,30 +1,50 @@
 "use client";
 
 import { createContext, useCallback, useContext, useRef, useState } from "react";
+import { removeEvent, type LogResult } from "@/lib/client/log";
 import type { Feedback } from "@/lib/domain/rules-feedback";
 
-type Toast = { id: number; text: string; tone: Feedback["tone"] | "info" };
-type Ctx = { show: (text: string, tone?: Toast["tone"]) => void; showFeedback: (f: Feedback | null, fallback?: string) => void };
+type Tone = Feedback["tone"] | "info";
+type Action = { label: string; run: () => void | Promise<void> };
+type Toast = { id: number; text: string; tone: Tone; action?: Action };
+
+type Ctx = {
+  show: (text: string, tone?: Tone, action?: Action) => void;
+  showFeedback: (f: Feedback | null, fallback?: string) => void;
+  /**
+   * Shows what was just logged with an Undo button. One tap logs instantly; a mistaken
+   * tap is undone with one more tap, and the event is removed from phone and server.
+   */
+  logged: (result: LogResult, fallback: string) => void;
+};
 
 const ToastContext = createContext<Ctx | null>(null);
 
-const TONE: Record<Toast["tone"], string> = {
+const TONE: Record<Tone, string> = {
   good: "border-good/40",
   tip: "border-tip/40",
   care: "border-care/50",
   info: "border-line",
 };
 
+const UNDO_MS = 6500;
+
 export function ToastProvider({ children }: { children: React.ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([]);
   const nextId = useRef(1);
 
-  const show = useCallback((text: string, tone: Toast["tone"] = "info") => {
-    const id = nextId.current++;
-    setToasts((t) => [...t.slice(-1), { id, text, tone }]);
-    const ms = tone === "care" ? 9000 : Math.min(7000, 2500 + text.length * 35);
-    setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), ms);
-  }, []);
+  const dismiss = useCallback((id: number) => setToasts((t) => t.filter((x) => x.id !== id)), []);
+
+  const show = useCallback(
+    (text: string, tone: Tone = "info", action?: Action) => {
+      const id = nextId.current++;
+      setToasts((t) => [...t.slice(-1), { id, text, tone, action }]);
+      const readMs = Math.min(8000, 2500 + text.length * 35);
+      const ms = Math.max(tone === "care" ? 9000 : readMs, action ? UNDO_MS : 0);
+      setTimeout(() => dismiss(id), ms);
+    },
+    [dismiss],
+  );
 
   const showFeedback = useCallback(
     (f: Feedback | null, fallback?: string) => {
@@ -34,19 +54,45 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
     [show],
   );
 
+  const logged = useCallback(
+    (result: LogResult, fallback: string) => {
+      const f = result.feedback;
+      show(f?.text ?? fallback, f?.tone ?? "info", {
+        label: "Undo",
+        run: async () => {
+          await removeEvent(result.event.id);
+          show("Removed.", "info");
+        },
+      });
+    },
+    [show],
+  );
+
   return (
-    <ToastContext.Provider value={{ show, showFeedback }}>
+    <ToastContext.Provider value={{ show, showFeedback, logged }}>
       {children}
       <div className="pointer-events-none fixed inset-x-0 bottom-24 z-50 flex flex-col items-center gap-2 px-4" aria-live="polite">
         {toasts.map((t) => (
-          <button
+          <div
             key={t.id}
-            type="button"
-            onClick={() => setToasts((all) => all.filter((x) => x.id !== t.id))}
-            className={`toast-enter pointer-events-auto w-full max-w-md rounded-2xl border bg-surface px-4 py-3 text-left text-sm leading-snug text-ink shadow-lg ${TONE[t.tone]}`}
+            className={`toast-enter pointer-events-auto flex w-full max-w-md items-center gap-3 rounded-2xl border bg-surface py-2 pl-4 pr-2 text-sm leading-snug text-ink shadow-lg ${TONE[t.tone]}`}
           >
-            {t.text}
-          </button>
+            <button type="button" onClick={() => dismiss(t.id)} className="min-h-10 flex-1 py-1 text-left">
+              {t.text}
+            </button>
+            {t.action ? (
+              <button
+                type="button"
+                onClick={async () => {
+                  dismiss(t.id);
+                  await t.action?.run();
+                }}
+                className="h-11 shrink-0 rounded-xl bg-surface-2 px-4 font-semibold text-brand"
+              >
+                {t.action.label}
+              </button>
+            ) : null}
+          </div>
         ))}
       </div>
     </ToastContext.Provider>

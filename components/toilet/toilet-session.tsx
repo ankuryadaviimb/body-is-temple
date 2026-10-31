@@ -22,7 +22,7 @@ export function ToiletSession() {
   const router = useRouter();
   const today = useToday();
   const events = useDayEvents(today);
-  const { showFeedback } = useToast();
+  const { logged } = useToast();
   const [startedAt] = useState(() => new Date());
   const [now, setNow] = useState(() => Date.now());
   const [stage, setStage] = useState<"sit" | "rate">("sit");
@@ -77,8 +77,7 @@ export function ToiletSession() {
       ...(passed ? {} : { bristol: undefined, complete: undefined }),
     };
     const clean = Object.fromEntries(Object.entries(payload).filter(([, v]) => v !== undefined)) as Payload<"toilet">;
-    const { feedback } = await logEvent("toilet", clean, { at: startedAt });
-    showFeedback(feedback, "Saved.");
+    logged(await logEvent("toilet", clean, { at: startedAt }), "Toilet visit saved.");
     router.push("/");
   }
 
