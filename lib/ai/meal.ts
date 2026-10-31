@@ -50,7 +50,7 @@ export async function analyzeMealEvent(ctx: AuthedContext, event: StoredEvent, s
         { role: "system", content: MEAL_SYSTEM_PROMPT },
         { role: "user", content },
       ],
-      { tz: settings.tz, maxTokens: 700, temperature: 0.1, jsonObject: true },
+      { tz: settings.tz, maxTokens: 1200, temperature: 0.1, jsonObject: true },
       (text) => normalizeMealAnalysis(extractJsonObject(text)) !== null,
     );
     const analysis = normalizeMealAnalysis(extractJsonObject(result.text));

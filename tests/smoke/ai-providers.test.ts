@@ -2,7 +2,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { extractJsonObject } from "@/lib/ai/json";
 import { MEAL_SYSTEM_PROMPT, mealUserPrompt, normalizeMealAnalysis } from "@/lib/ai/meal-normalize";
-import { endpointFor, MODELS, type ProviderId } from "@/lib/ai/providers-config";
+import { endpointFor, extraBody, MODELS, type ProviderId } from "@/lib/ai/providers-config";
 
 /**
  * Live check of the AI providers with your own keys. Skipped unless you run:
@@ -29,12 +29,13 @@ async function ask(provider: ProviderId, imageDataUrl: string | null, text: stri
     method: "POST",
     headers: { authorization: `Bearer ${keys[provider]}`, "content-type": "application/json" },
     body: JSON.stringify({
+      ...extraBody(provider),
       model: MODELS[provider][imageDataUrl ? "vision" : "text"],
       messages: [
         { role: "system", content: MEAL_SYSTEM_PROMPT },
         { role: "user", content },
       ],
-      max_tokens: 700,
+      max_tokens: 1200,
       temperature: 0.1,
     }),
     signal: AbortSignal.timeout(60_000),

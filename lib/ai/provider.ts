@@ -2,7 +2,7 @@ import "server-only";
 import { env } from "@/lib/env";
 import type { AuthedContext } from "@/lib/supabase/server";
 import { localParts } from "@/lib/domain/time";
-import { DAILY_CAPS, endpointFor, MODELS, type ProviderId, type TaskKind } from "./providers-config";
+import { DAILY_CAPS, endpointFor, extraBody, MODELS, type ProviderId, type TaskKind } from "./providers-config";
 
 /**
  * One interface for every AI provider. All three expose OpenAI-compatible chat
@@ -93,6 +93,7 @@ export async function chat(
   }
   const model = cfg.models[task];
   const body: Record<string, unknown> = {
+    ...extraBody(provider),
     model,
     messages,
     max_tokens: opts.maxTokens ?? 800,

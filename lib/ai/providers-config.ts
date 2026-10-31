@@ -18,5 +18,15 @@ export function endpointFor(provider: ProviderId, cloudflareAccountId?: string):
   return "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions";
 }
 
+/**
+ * Extra request fields per provider. Gemma 4 on Cloudflare "thinks" by default, which
+ * took about 20 s per meal and could use the whole token budget; turning it off brings
+ * replies to about 1 s with the same JSON.
+ */
+export function extraBody(provider: ProviderId): Record<string, unknown> {
+  if (provider === "cloudflare") return { chat_template_kwargs: { enable_thinking: false } };
+  return {};
+}
+
 /** Daily request caps, set below each provider's free allowance. */
 export const DAILY_CAPS: Record<ProviderId, number> = { cloudflare: 300, groq: 800, gemini: 200 };
