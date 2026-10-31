@@ -16,6 +16,8 @@ import {
   WindIcon,
   AlertIcon,
   ClockIcon,
+  LeafIcon,
+  SeedsIcon,
 } from "./icons";
 
 type Visual = { Icon: (p: { className?: string }) => React.ReactNode; tint: string };
@@ -43,8 +45,14 @@ export const EVENT_VISUALS: Record<EventKind, Visual> = {
   note: { Icon: NoteIcon, tint: "bg-surface-3 text-ink-2" },
 };
 
-export function EventIcon({ kind, size = "md" }: { kind: EventKind; size?: "sm" | "md" }) {
-  const v = EVENT_VISUALS[kind] ?? EVENT_VISUALS.note;
+/** Drinks made with water get their own look, so amla and chia stand out from tea. */
+const DRINK_VISUALS: Record<string, Visual> = {
+  amla: { Icon: LeafIcon, tint: "bg-move/15 text-move" },
+  chia: { Icon: SeedsIcon, tint: "bg-rest/15 text-rest" },
+};
+
+export function EventIcon({ kind, size = "md", drink }: { kind: EventKind; size?: "sm" | "md"; drink?: string }) {
+  const v = (kind === "drink" && drink ? DRINK_VISUALS[drink] : undefined) ?? EVENT_VISUALS[kind] ?? EVENT_VISUALS.note;
   const box = size === "sm" ? "size-8 rounded-xl" : "size-10 rounded-2xl";
   const icon = size === "sm" ? "size-4" : "size-5";
   return (

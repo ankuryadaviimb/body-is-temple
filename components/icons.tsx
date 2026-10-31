@@ -249,3 +249,9 @@ export const PencilIcon = (p: IconProps) => (
     <path d="M13 7l4 4" />
   </Svg>
 );
+export const SeedsIcon = (p: IconProps) => (
+  <Svg {...p}>
+    <path d="M7 4h10l-1 15a2 2 0 0 1-2 2h-4a2 2 0 0 1-2-2z" />
+    <path d="M10 11h.01M14 11h.01M12 14h.01M10 17h.01M14 17h.01" strokeWidth="2.6" />
+  </Svg>
+);

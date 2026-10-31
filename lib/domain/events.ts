@@ -36,6 +36,10 @@ export const MEAL_TAGS = [
 ] as const;
 export type MealTag = (typeof MEAL_TAGS)[number];
 
+/** Nutrients a meal can be a good source of (about a fifth of a day's need or more). */
+export const NUTRIENTS = ["iron", "calcium", "vitamin_c", "b12", "folate", "potassium", "magnesium", "vitamin_a", "zinc", "omega3"] as const;
+export type Nutrient = (typeof NUTRIENTS)[number];
+
 const Range = z.strictObject({
   low: z.number().min(0).max(5000),
   high: z.number().min(0).max(5000),
@@ -55,6 +59,14 @@ export const MealAnalysis = z.strictObject({
   tags: z.array(z.enum(MEAL_TAGS)).max(15),
   protein_g: Range,
   kcal: Range,
+  /** Added later, so older analyses without them still load. */
+  carbs_g: Range.optional(),
+  fat_g: Range.optional(),
+  fiber_g: Range.optional(),
+  /** Servings of about 80 g (potato does not count as a vegetable). */
+  veg_servings: z.number().min(0).max(10).optional(),
+  fruit_servings: z.number().min(0).max(10).optional(),
+  nutrients: z.array(z.enum(NUTRIENTS)).max(10).optional(),
   slot_guess: z.enum(MEAL_SLOTS).nullable(),
   confidence: z.number().min(0).max(1),
   notes: z.string().max(300).nullable(),
@@ -68,7 +80,7 @@ export const PayloadSchemas = {
   sleep: z.strictObject({}),
   water: z.strictObject({ ml: z.int().min(50).max(2000) }),
   drink: z.strictObject({
-    type: z.enum(["tea", "coffee", "amla", "juice", "milk", "buttermilk", "other"]),
+    type: z.enum(["tea", "coffee", "amla", "chia", "juice", "milk", "buttermilk", "other"]),
     ml: z.int().min(20).max(2000),
   }),
   isabgol: z.strictObject({

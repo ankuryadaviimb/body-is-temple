@@ -5,14 +5,17 @@ import { ClientEventInput, type EventKind, type Payload } from "@/lib/domain/eve
 import { LADDER } from "@/lib/domain/ladder";
 import { logicalDayFor, type Anchor } from "@/lib/domain/logical-day";
 import { feedbackFor, type Feedback } from "@/lib/domain/rules-feedback";
-import { DEFAULT_SETTINGS, type Settings } from "@/lib/domain/settings";
+import { withDefaults, type Settings } from "@/lib/domain/settings";
 import type { CachedSnapshot } from "@/lib/domain/snapshot";
 import { addDays, localParts } from "@/lib/domain/time";
 import { db, kvGet, type LocalEvent } from "./db";
+import { deviceSettings } from "./device";
 import { pollForAnalysis, syncNow } from "./sync";
 
 export async function currentSettings(): Promise<Settings> {
-  return (await kvGet<CachedSnapshot>("snapshot"))?.settings ?? DEFAULT_SETTINGS;
+  const cached = (await kvGet<CachedSnapshot>("snapshot"))?.settings;
+  // Older cached copies may miss newer fields, so fill them in.
+  return cached ? withDefaults(cached) : deviceSettings();
 }
 
 async function localAnchors(aroundIso: string, tz: string): Promise<Anchor[]> {
@@ -67,11 +70,13 @@ export async function logEvent<K extends EventKind>(
   let finalPayload = { ...payload } as Record<string, unknown>;
   let meta: Record<string, unknown> = {};
   if (kind === "meal") {
-    const earlier = (await dayEvents(logical_day))
+    const sameDay = await dayEvents(logical_day);
+    const earlier = sameDay
       .filter((e) => e.kind === "meal" && e.occurred_at < occurred_at)
       .map((e) => mealSlotOf(e))
       .filter((s): s is NonNullable<typeof s> => s !== null);
-    const slot = (payload as Payload<"meal">).slot ?? inferMealSlot(occurred_at, earlier, settings.tz);
+    const wakeAt = sameDay.find((e) => e.kind === "wake")?.occurred_at ?? null;
+    const slot = (payload as Payload<"meal">).slot ?? inferMealSlot(occurred_at, earlier, settings.tz, undefined, wakeAt);
     finalPayload = { ...finalPayload, slot };
     const hasText = typeof finalPayload.text === "string" && (finalPayload.text as string).length > 0;
     meta = { ai_status: opts.photo || hasText ? "pending" : "skipped" };

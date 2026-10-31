@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { logEvent, updateEvent } from "@/lib/client/log";
 import type { ResetRoutine } from "@/lib/content/resets";
 import { SessionHeader, useWakeLock } from "../breath-pacer";
+import { ExerciseFigure } from "../exercise-figure";
 import { useToast } from "../toast";
 
 /** Step-by-step guided reset with a timer per step. Logs the episode when it starts. */
@@ -76,13 +77,16 @@ export function ResetRoutineView({ routine }: { routine: ResetRoutine }) {
           ) : null}
           <ol className="space-y-2.5">
             {variant.steps.map((s, i) => (
-              <li key={s.title} className="flex gap-3 rounded-[22px] bg-surface p-4 shadow-card">
-                <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-brand/15 text-sm font-semibold text-brand">{i + 1}</span>
-                <div>
-                  <p className="text-[15px] font-semibold">
-                    {s.title} <span className="font-normal text-ink-3">· {s.seconds} s</span>
-                  </p>
-                  <p className="mt-1 text-sm leading-relaxed text-ink-2">{s.text}</p>
+              <li key={s.title} className="rounded-[22px] bg-surface p-4 shadow-card">
+                {s.pose ? <ExerciseFigure pose={s.pose} mirror={s.mirror} className="mb-2 h-28 w-full" /> : null}
+                <div className="flex gap-3">
+                  <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-brand/15 text-sm font-semibold text-brand">{i + 1}</span>
+                  <div>
+                    <p className="text-[15px] font-semibold">
+                      {s.title} <span className="font-normal text-ink-3">· {s.seconds} s</span>
+                    </p>
+                    <p className="mt-1 text-sm leading-relaxed text-ink-2">{s.text}</p>
+                  </div>
                 </div>
               </li>
             ))}
@@ -107,7 +111,8 @@ export function ResetRoutineView({ routine }: { routine: ResetRoutine }) {
           <p className="text-[13px] font-semibold uppercase tracking-wide text-ink-3">
             Step {stepIndex + 1} of {variant.steps.length}
           </p>
-          <div className="relative flex size-44 items-center justify-center">
+          {step.pose ? <ExerciseFigure pose={step.pose} mirror={step.mirror} className="h-44 w-full max-w-sm" /> : null}
+          <div className={`relative flex items-center justify-center ${step.pose ? "size-28" : "size-44"}`}>
             <svg viewBox="0 0 100 100" className="absolute inset-0 size-full text-brand" aria-hidden>
               <circle cx="50" cy="50" r={r} fill="none" stroke="currentColor" strokeOpacity="0.15" strokeWidth="5" />
               <circle
@@ -123,7 +128,7 @@ export function ResetRoutineView({ routine }: { routine: ResetRoutine }) {
                 transform="rotate(-90 50 50)"
               />
             </svg>
-            <span className="tabular text-5xl font-semibold">{left}</span>
+            <span className={`tabular font-semibold ${step.pose ? "text-3xl" : "text-5xl"}`}>{left}</span>
           </div>
           <h2 className="text-[24px] font-semibold tracking-tight">{step.title}</h2>
           <p className="max-w-sm text-[15px] leading-relaxed text-ink-2">{step.text}</p>

@@ -3,9 +3,10 @@
 import Link from "next/link";
 import { useState } from "react";
 import { logEvent } from "@/lib/client/log";
+import { clearVisit } from "@/lib/client/toilet-visit";
 import type { Nudge } from "@/lib/domain/next-up";
 import { GasSheet } from "../gas-sheet";
-import { ClockIcon, SeatIcon, SpoonIcon, WalkIcon, WindIcon } from "../icons";
+import { ClockIcon, CloseIcon, SeatIcon, SpoonIcon, WalkIcon, WindIcon } from "../icons";
 import { useToast } from "../toast";
 
 /** The one most useful thing to do now (Isabgol window, post-meal walk, gas check, and so on). */
@@ -48,6 +49,28 @@ export function NextUpCard({ nudge }: { nudge: Nudge }) {
         </button>
       ) : null}
       <GasSheet open={gasOpen} onClose={() => setGasOpen(false)} />
+    </section>
+  );
+}
+
+/** Shown after "Going now" until the visit is rated: the phone stayed outside. */
+export function BackFromToiletCard({ startedAt, now }: { startedAt: string; now: Date }) {
+  const minutes = Math.max(0, Math.round((now.getTime() - new Date(startedAt).getTime()) / 60_000));
+  return (
+    <section aria-label="Rate your toilet visit" className="fade-in -mt-2 flex items-center gap-3 rounded-[22px] bg-surface p-3.5 shadow-card">
+      <span className="flex size-10 shrink-0 items-center justify-center rounded-2xl bg-gut/15 text-gut">
+        <SeatIcon className="size-5" />
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block text-[16px] font-semibold leading-snug">Back from the toilet?</span>
+        <span className="block text-[13px] leading-snug text-ink-2">Started {minutes < 2 ? "just now" : `${minutes} min ago`}. Rate it in a few taps.</span>
+      </span>
+      <Link href="/toilet?back=1" className="pressable flex h-10 shrink-0 items-center rounded-full bg-brand px-4 text-[14px] font-semibold text-brand-ink">
+        Rate
+      </Link>
+      <button type="button" onClick={() => void clearVisit()} aria-label="Dismiss" className="pressable -mr-1 flex size-8 shrink-0 items-center justify-center rounded-full text-ink-3">
+        <CloseIcon className="size-4" />
+      </button>
     </section>
   );
 }

@@ -5,6 +5,7 @@ import { dayDigest } from "@/lib/domain/digest";
 import type { StoredEvent } from "@/lib/domain/events";
 import { LADDER } from "@/lib/domain/ladder";
 import { memoryForPrompt, type MemoryFile, type MemorySlug } from "@/lib/domain/memory";
+import { dailyTargets } from "@/lib/domain/nutrition";
 import type { Settings } from "@/lib/domain/settings";
 import { describeFinding, MIN_DAYS, type ToleranceReport } from "@/lib/domain/tolerance";
 import { addDays, formatClock, localParts, zoneDisplay } from "@/lib/domain/time";
@@ -66,9 +67,12 @@ export function classesOn(settings: Settings, day: string): string | null {
 }
 
 function targetsLine(settings: Settings): string {
+  const t = dailyTargets(settings);
   return [
     `water ${settings.water_target_ml} ml`,
-    settings.protein_target_g ? `protein ${settings.protein_target_g} g` : null,
+    t.protein ? `protein ${t.protein} g` : "protein target unknown (no weight set)",
+    `fiber ${t.fiber} g`,
+    t.kcal ? `calories ${t.kcal.low} to ${t.kcal.high} kcal` : null,
     `bedtime ${formatClock(settings.bedtime_target_min)}`,
     `Isabgol ${settings.isabgol_delay_min} min after dinner`,
     `usual tea ${settings.tea_ml} ml`,
@@ -94,12 +98,12 @@ function patternsText(report: ToleranceReport): string {
     .join("\n");
 }
 
-function logsText(byDay: Map<string, StoredEvent[]>, today: string, tz: string, includeToday: boolean): string {
+function logsText(byDay: Map<string, StoredEvent[]>, today: string, settings: Settings, includeToday: boolean): string {
   const lines: string[] = [];
   for (let i = DIGEST_DAYS - 1; i >= (includeToday ? 0 : 1); i--) {
     const day = addDays(today, -i);
     const label = i === 0 ? "today so far" : i === 1 ? "yesterday" : undefined;
-    lines.push(dayDigest(day, byDay.get(day) ?? [], tz, label));
+    lines.push(dayDigest(day, byDay.get(day) ?? [], settings.tz, label, settings));
   }
   return lines.join("\n");
 }
@@ -133,7 +137,7 @@ export function askPrompt(input: {
     `TARGETS: ${targetsLine(settings)}. Classes: ${classes ?? "no schedule set"}. Today: ${classesOn(settings, today) ?? "no class"}.`,
     `HABIT THIS WEEK: ${step.gut} Also: ${step.other}`,
     `MEMORY:\n${memoryForPrompt(data.memory.filter((m) => MEMORY_BY_INTENT[input.intent].includes(m.slug))) || "No memory notes yet."}`,
-    `LOGS (last ${DIGEST_DAYS} days, oldest first):\n${logsText(data.byDay, today, settings.tz, true)}`,
+    `LOGS (last ${DIGEST_DAYS} days, oldest first):\n${logsText(data.byDay, today, settings, true)}`,
     `PATTERNS:\n${patternsText(data.tolerance)}`,
     `EVIDENCE:\n${evidenceText(evidenceFor(input.intent))}`,
   ];
@@ -152,8 +156,8 @@ export function cardPrompt(input: { data: CoachData; settings: Settings; today: 
     `TARGETS: ${targetsLine(settings)}. Class that day: ${classesOn(settings, today) ?? "none"}.`,
     `HABIT THIS WEEK: ${step.gut} Also: ${step.other}`,
     `MEMORY:\n${memoryForPrompt(data.memory.filter((m) => CARD_MEMORY.includes(m.slug))) || "No memory notes yet."}`,
-    `LOGS (last ${DIGEST_DAYS - 1} days, yesterday last):\n${logsText(data.byDay, today, settings.tz, false)}`,
-    `THIS MORNING SO FAR:\n${dayDigest(today, data.byDay.get(today) ?? [], settings.tz, "today")}`,
+    `LOGS (last ${DIGEST_DAYS - 1} days, yesterday last):\n${logsText(data.byDay, today, settings, false)}`,
+    `THIS MORNING SO FAR:\n${dayDigest(today, data.byDay.get(today) ?? [], settings.tz, "today", settings)}`,
     `PATTERNS:\n${patternsText(data.tolerance)}`,
     `EVIDENCE:\n${evidenceText(evidenceFor("morning"))}`,
   ].join("\n\n");

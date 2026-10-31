@@ -13,6 +13,7 @@ export const SAMPLE_SETTINGS = {
   ...DEFAULT_SETTINGS,
   tz: TZ,
   weight_kg: 72,
+  protein_auto: false,
   protein_target_g: 85,
   classes: [1, 2, 3, 4, 5].map((weekday) => ({ weekday, start_min: 7 * 60, label: "Group class", kind: "group" as const })),
 };

@@ -4,7 +4,9 @@
  * they are not a treatment, and they never replace a doctor or pelvic floor physio.
  */
 
-export type ResetStep = { title: string; seconds: number; text: string };
+import type { Pose } from "./poses";
+
+export type ResetStep = { title: string; seconds: number; text: string; pose?: Pose; mirror?: boolean };
 export type ResetVariant = { id: string; label: string; steps: ResetStep[] };
 export type ResetRoutine = { kind: "heavy" | "gas"; title: string; intro: string; reframe: string; variants: ResetVariant[] };
 
@@ -22,11 +24,14 @@ export const RESETS: Record<"heavy" | "gas", ResetRoutine> = {
         steps: [
           {
             title: "Figure-4, right leg",
+            pose: "figure4",
             seconds: 60,
             text: "Sit near the front of the chair. Cross your right ankle over your left knee. Keep your back flat and lean forward a little until you feel a stretch deep in the right buttock.",
           },
           {
             title: "Figure-4, left leg",
+            pose: "figure4",
+            mirror: true,
             seconds: 60,
             text: "Switch legs. Part your back teeth, let your tongue rest, and breathe slowly into your lower belly so it expands toward your lap.",
           },
@@ -38,11 +43,13 @@ export const RESETS: Record<"heavy" | "gas", ResetRoutine> = {
         steps: [
           {
             title: "Gravity drain",
+            pose: "gravity_drain",
             seconds: 90,
             text: "Lie on your back. Pull your knees wide toward your armpits, or rest your legs up a wall with knees soft. Breathe slowly into your belly.",
           },
           {
             title: "Squeeze and drop, 3 times",
+            pose: "squeeze_drop",
             seconds: 36,
             text: "Gently tighten the anal muscle at about 20% for 2 seconds, then let it go completely for 10 seconds while breathing out through your mouth. Repeat 3 times.",
           },
@@ -62,21 +69,25 @@ export const RESETS: Record<"heavy" | "gas", ResetRoutine> = {
         steps: [
           {
             title: "Hips up",
+            pose: "hips_up",
             seconds: 75,
             text: "Kneel, then lower your chest and head onto the bed with your hips up in the air. Let your belly hang loose and breathe slowly.",
           },
           {
             title: "Knees to chest",
+            pose: "knees_to_chest",
             seconds: 60,
             text: "Lie on your back, hug both knees to your chest, and rock gently side to side.",
           },
           {
             title: "Belly circles",
+            pose: "belly_circles",
             seconds: 60,
             text: "With your fingertips, massage slowly in a circle: up the right side, across under the ribs, and down the left side.",
           },
           {
             title: "Rest on your left side",
+            pose: "left_side",
             seconds: 45,
             text: "Roll onto your left side with your right knee drawn up a little. Breathe out slowly.",
           },

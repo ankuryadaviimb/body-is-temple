@@ -18,7 +18,7 @@ export const FEELINGS: { id: Feeling; label: string; hint: string }[] = [
   { id: "urge", label: "A real urge", hint: "Pressure low down that builds, like a wave" },
   { id: "heavy", label: "Heavy or not empty", hint: "A dull, full or unfinished feeling" },
   { id: "gas", label: "Gas pressure", hint: "Bloated, or wind that wants out" },
-  { id: "unsure", label: "Not sure", hint: "Something is there, but it is hard to tell" },
+  { id: "unsure", label: "Gas or stool? Not sure", hint: "Pressure low down, hard to tell which" },
 ];
 
 export type TriageLink = { label: string; href: string };
@@ -33,7 +33,8 @@ export type TriageResult = {
   secondary: TriageLink | null;
 };
 
-const TOILET: TriageLink = { label: "Start toilet session", href: "/toilet" };
+/** Starts a "Going now" visit, so the phone can stay outside. */
+const TOILET: TriageLink = { label: "Going now", href: "/toilet?going=1" };
 const HEAVY_RESET: TriageLink = { label: "Start 2-minute reset", href: "/reset/heavy" };
 const GAS_RESET: TriageLink = { label: "Start 2-minute gas relief", href: "/reset/gas" };
 
@@ -70,13 +71,16 @@ export function triage(feeling: Feeling, today: StoredEvent[], now: Date, tz: st
   if (feeling === "urge") verdict = "go";
   else if (feeling === "gas") verdict = "reset_first";
   else if (feeling === "heavy") verdict = recent || rounds >= 3 ? "wait" : "reset_first";
-  else verdict = rounds === 0 && (morning || afterMeal) ? "go" : recent ? "wait" : "reset_first";
+  else verdict = rounds === 0 && (morning || afterMeal) ? "go" : "reset_first";
 
   if (verdict === "go") {
     return {
       verdict,
       title: "Go now",
-      lead: feeling === "urge" ? "That sounds like a real urge. Go while it is here." : "This is a good time to try. Go, and keep it easy.",
+      lead:
+        feeling === "urge"
+          ? "That sounds like a real urge. Go while it is here."
+          : "This is a good time to try. If it turns out to be only gas, let it out and get up.",
       steps: [
         "Feet up on a stool, lean forward, elbows on knees.",
         "Breathe in for 4, then a long, slow \"moo\" out. Let your belly soften.",
@@ -107,6 +111,23 @@ export function triage(feeling: Feeling, today: StoredEvent[], now: Date, tz: st
       reasons,
       primary: HEAVY_RESET,
       secondary: { label: "It is a real urge", href: TOILET.href },
+    };
+  }
+
+  if (feeling === "unsure") {
+    return {
+      verdict,
+      title: "Test it first: gas or stool?",
+      lead: "Lie down and bring your knees to your chest for 1 to 2 minutes. If gas comes out and the pressure fades, it was gas. If it stays or builds into a wave, it is stool: go.",
+      steps: [
+        "Knees to chest, or hips up, for 1 to 2 minutes.",
+        "Gas passes and the feeling fades: carry on with your day.",
+        "Pressure stays or builds: go, with feet up and slow out-breaths.",
+        "Do not sit on the toilet to push gas out. It trains straining.",
+      ],
+      reasons,
+      primary: { label: "Start the 2-minute gas test", href: GAS_RESET.href },
+      secondary: { label: "It is building: going now", href: TOILET.href },
     };
   }
 

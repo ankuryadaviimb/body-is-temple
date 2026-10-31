@@ -36,7 +36,7 @@ const STRONG_CULPRIT = 1.5;
 const answer = (b: Body): CoachAnswer => ({ ...b, doctor: b.doctor ?? null, remember: [] });
 
 function hrefToAction(href: string): CoachAction {
-  if (href === "/toilet") return "toilet";
+  if (href.startsWith("/toilet")) return "toilet";
   if (href === "/reset/gas") return "reset_gas";
   return "reset_heavy";
 }

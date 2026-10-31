@@ -11,7 +11,7 @@ import { doctorNote, redFlagsInEvents, redFlagsInText } from "@/lib/domain/coach
 import { DEFAULT_SETTINGS } from "@/lib/domain/settings";
 import { ev, ist, TZ } from "../helpers";
 
-const settings = { ...DEFAULT_SETTINGS, tz: TZ, protein_target_g: 80 };
+const settings = { ...DEFAULT_SETTINGS, tz: TZ, protein_auto: false, protein_target_g: 80 };
 const at = (local: string) => new Date(ist(local));
 
 function meal(local: string, slot: string, items: string[], tags: string[], protein: [number, number] = [10, 14]) {

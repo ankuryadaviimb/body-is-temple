@@ -67,21 +67,50 @@ export const DEFAULT_MEAL_WINDOWS: MealSlotWindows = {
 };
 
 /**
- * Infers the meal slot from the time and what was already eaten today.
- * The first main meal before lunch is breakfast; later small meals are snacks.
+ * Infers the meal slot from the time, what was already eaten today and, when known,
+ * the wake time. A late breakfast still counts as breakfast (first meal within 4 hours
+ * of waking, before 3 PM), and a skipped meal is fine: the first meal at 1:30 PM after
+ * an early wake is lunch. The AI later checks the food itself (see refineMealSlot).
  */
 export function inferMealSlot(
   at: string,
   earlierSlots: MealSlot[],
   tz: string,
   w: MealSlotWindows = DEFAULT_MEAL_WINDOWS,
+  wakeAt: string | null = null,
 ): MealSlot {
   const m = localParts(at, tz).minutes;
   if (m >= w.lateStart || m < 5 * 60) return "late";
   if (m >= w.dinnerStart) return earlierSlots.includes("dinner") ? "snack" : "dinner";
-  if (m >= w.lunchStart && m < w.lunchEnd) return earlierSlots.includes("lunch") ? "snack" : "lunch";
-  if (m < w.lunchStart) return earlierSlots.includes("breakfast") ? "snack" : "breakfast";
+  const hadMain = earlierSlots.some((s) => s === "breakfast" || s === "lunch");
+  if (!hadMain) {
+    if (m < w.lunchStart) return "breakfast";
+    const sinceWake = wakeAt ? minutesBetween(wakeAt, at) : null;
+    if (m < 15 * 60 && sinceWake !== null && sinceWake >= 0 && sinceWake <= 4 * 60) return "breakfast";
+    return "lunch";
+  }
+  if (m < w.lunchStart) return "snack";
+  if (m < w.lunchEnd + 30) return earlierSlots.includes("lunch") ? "snack" : "lunch";
   return "snack";
+}
+
+/**
+ * Second opinion from the food itself. Indian breakfast foods (poha, idli, paratha) at a
+ * late hour mean a late breakfast; a dal-rice plate as the first meal at noon means
+ * breakfast was skipped. Only used when the person did not choose the slot.
+ */
+export function refineMealSlot(
+  current: MealSlot,
+  guess: MealSlot | null,
+  minutes: number,
+  earlierSlots: MealSlot[],
+): MealSlot {
+  if (!guess || guess === current) return current;
+  const hadMain = earlierSlots.some((s) => s === "breakfast" || s === "lunch");
+  if (current === "lunch" && guess === "breakfast" && !hadMain && minutes < 15 * 60) return "breakfast";
+  if (current === "breakfast" && (guess === "lunch" || guess === "dinner") && minutes >= 11 * 60 && !hadMain) return "lunch";
+  if (current === "snack" && guess === "lunch" && !earlierSlots.includes("lunch") && minutes >= 11 * 60 && minutes < 17 * 60) return "lunch";
+  return current;
 }
 
 export function mealSlotOf(event: StoredEvent): MealSlot | null {
@@ -101,8 +130,16 @@ export function lastDinner(dayEvents: StoredEvent[]): StoredEvent | null {
   return dinners.at(-1) ?? null;
 }
 
+/** Drinks made with a glass of water (amla juice in water, soaked chia seeds) count as water. */
+const WATER_BASED = new Set(["amla", "chia"]);
+
 export function waterMl(dayEvents: StoredEvent[]): number {
-  return ofKind(dayEvents, "water").reduce((sum, e) => sum + (payloadOf(e, "water")?.ml ?? 0), 0);
+  const water = ofKind(dayEvents, "water").reduce((sum, e) => sum + (payloadOf(e, "water")?.ml ?? 0), 0);
+  const based = ofKind(dayEvents, "drink").reduce((sum, e) => {
+    const p = payloadOf(e, "drink");
+    return p && WATER_BASED.has(p.type) ? sum + p.ml : sum;
+  }, 0);
+  return water + based;
 }
 
 /** Water and other drinks before the first toilet visit of the day (morning liquids). */

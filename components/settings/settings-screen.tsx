@@ -8,6 +8,7 @@ import { clearDevice } from "@/lib/client/db";
 import { useSettings } from "@/lib/client/hooks";
 import { refreshFromServer } from "@/lib/client/sync";
 import type { Settings } from "@/lib/domain/settings";
+import { autoProtein, calorieTarget, PROTEIN_PER_KG } from "@/lib/domain/nutrition";
 import { zoneLabel } from "@/lib/domain/time";
 import { BookIcon, ChartIcon, ChevronRightIcon, PlusIcon, TrashIcon } from "../icons";
 import { useToast } from "../toast";
@@ -67,6 +68,14 @@ function SettingsForm({ initial }: { initial: Settings }) {
   }
 
   const num = (v: string) => (v === "" ? null : Number(v));
+  const auto = autoProtein(form.weight_kg, form.height_cm);
+  const kcal = calorieTarget(form);
+  const bodyNote = [
+    auto
+      ? `Auto protein: ${PROTEIN_PER_KG} g per kg of ${auto.basisKg} kg${auto.capped ? " (the healthy weight for your height, so the target does not grow with body fat)" : ""}, a common target when you train most days and want to lose fat.`
+      : "Add weight and height for an automatic protein target.",
+    kcal ? `Calories for steady fat loss: about ${kcal.low.toLocaleString("en-IN")} to ${kcal.high.toLocaleString("en-IN")} a day.` : "Birth year and sex are optional; they add a calorie target.",
+  ].join(" ");
   const dirty = JSON.stringify(form) !== JSON.stringify(initial);
   const field = "tabular w-28 bg-transparent text-right text-[17px] text-ink outline-none placeholder:text-ink-3";
 
@@ -77,21 +86,63 @@ function SettingsForm({ initial }: { initial: Settings }) {
         <h1 className="mt-1 text-[32px] font-bold leading-tight tracking-tight">Settings</h1>
       </header>
 
-      <Group title="Body" note="Weight sets a starting protein target of 1.2 g per kg. The coach tunes it over time.">
+      <Group title="Body" note={bodyNote}>
         <Row label="Weight" unit="kg">
           <input inputMode="decimal" placeholder="Add" className={field} value={form.weight_kg ?? ""} onChange={(e) => set("weight_kg", num(e.target.value))} />
         </Row>
         <Row label="Height" unit="cm">
           <input inputMode="decimal" placeholder="Add" className={field} value={form.height_cm ?? ""} onChange={(e) => set("height_cm", num(e.target.value))} />
         </Row>
-        <Row label="Protein target" unit="g a day">
-          <input inputMode="numeric" placeholder="Auto" className={field} value={form.protein_target_g ?? ""} onChange={(e) => set("protein_target_g", num(e.target.value))} />
+        <Row label="Birth year">
+          <input inputMode="numeric" placeholder="Optional" className={field} value={form.birth_year ?? ""} onChange={(e) => set("birth_year", num(e.target.value))} />
         </Row>
+        <div className="flex min-h-[52px] items-center gap-3 px-4">
+          <span className="flex-1 text-[17px]">Sex</span>
+          <Segmented
+            value={form.sex ?? "unset"}
+            options={[
+              { value: "male", label: "Male" },
+              { value: "female", label: "Female" },
+              { value: "unset", label: "Skip" },
+            ]}
+            onChange={(v) => set("sex", v === "unset" ? null : (v as "male" | "female"))}
+          />
+        </div>
+        <div className="flex min-h-[52px] items-center gap-3 px-4">
+          <span className="flex-1 text-[17px]">Protein target</span>
+          <Segmented
+            value={form.protein_auto ? "auto" : "custom"}
+            options={[
+              { value: "auto", label: "Auto" },
+              { value: "custom", label: "Custom" },
+            ]}
+            onChange={(v) => {
+              set("protein_auto", v === "auto");
+              if (v === "custom" && form.protein_target_g === null) set("protein_target_g", auto?.grams ?? 80);
+            }}
+          />
+        </div>
+        {form.protein_auto ? (
+          <div className="flex min-h-[52px] items-center gap-3 px-4">
+            <span className="flex-1 text-[17px] text-ink-2">Auto target</span>
+            <span className="tabular text-[17px] font-semibold">{auto ? `${auto.grams} g a day` : "Add weight"}</span>
+          </div>
+        ) : (
+          <Row label="Custom target" unit="g a day">
+            <input inputMode="numeric" className={field} value={form.protein_target_g ?? ""} onChange={(e) => set("protein_target_g", num(e.target.value))} />
+          </Row>
+        )}
       </Group>
 
       <Group title="Daily targets">
         <Row label="Water" unit="ml">
           <input inputMode="numeric" className={field} value={form.water_target_ml} onChange={(e) => set("water_target_ml", Number(e.target.value) || 0)} />
+        </Row>
+        <Row label="Usual glass" unit="ml">
+          <input inputMode="numeric" className={field} value={form.water_glass_ml} onChange={(e) => set("water_glass_ml", Number(e.target.value) || 0)} />
+        </Row>
+        <Row label="Chia per glass" unit="tbsp">
+          <input inputMode="decimal" className={field} value={form.chia_tbsp} onChange={(e) => set("chia_tbsp", Number(e.target.value) || 0)} />
         </Row>
         <Row label="Usual tea" unit="ml a cup">
           <input inputMode="numeric" className={field} value={form.tea_ml} onChange={(e) => set("tea_ml", Number(e.target.value) || 0)} />
@@ -218,6 +269,24 @@ function NavRow({ href, Icon, label }: { href: string; Icon: typeof BookIcon; la
       <span className="flex-1 text-[17px]">{label}</span>
       <ChevronRightIcon className="size-4 shrink-0 text-ink-3" />
     </Link>
+  );
+}
+
+function Segmented({ value, options, onChange }: { value: string; options: { value: string; label: string }[]; onChange: (v: string) => void }) {
+  return (
+    <div className="flex rounded-xl bg-surface-2 p-0.5">
+      {options.map((o) => (
+        <button
+          key={o.value}
+          type="button"
+          onClick={() => onChange(o.value)}
+          aria-pressed={o.value === value}
+          className={`pressable h-9 rounded-[10px] px-3 text-[14px] font-semibold ${o.value === value ? "bg-surface text-ink shadow-card" : "text-ink-2"}`}
+        >
+          {o.label}
+        </button>
+      ))}
+    </div>
   );
 }
 

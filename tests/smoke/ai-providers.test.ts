@@ -52,7 +52,7 @@ describe.skipIf(!enabled)("AI providers (live)", () => {
     it.skipIf(!keys[provider])(`${provider} reads a text meal`, async () => {
       const r = await ask(provider, null, mealUserPrompt("lunch", "2 roti, moong dal, cucumber raita"));
       const analysis = normalizeMealAnalysis(extractJsonObject(r.reply));
-      console.log(`${provider} text: HTTP ${r.status}, ${r.ms} ms`, JSON.stringify(analysis));
+      process.stderr.write(`${provider} text: HTTP ${r.status}, ${r.ms} ms ${JSON.stringify(analysis)}\n`);
       expect(r.status).toBe(200);
       expect(analysis).not.toBeNull();
     }, 90_000);
@@ -60,7 +60,7 @@ describe.skipIf(!enabled)("AI providers (live)", () => {
     it.skipIf(!keys[provider] || !dataUrl)(`${provider} reads a meal photo`, async () => {
       const r = await ask(provider, dataUrl, mealUserPrompt(null, null));
       const analysis = normalizeMealAnalysis(extractJsonObject(r.reply));
-      console.log(`${provider} photo: HTTP ${r.status}, ${r.ms} ms`, JSON.stringify(analysis));
+      process.stderr.write(`${provider} photo: HTTP ${r.status}, ${r.ms} ms ${JSON.stringify(analysis)}\n`);
       expect(r.status).toBe(200);
       expect(analysis).not.toBeNull();
     }, 90_000);

@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { logEvent } from "@/lib/client/log";
 import { PRACTICE_STEPS } from "@/lib/content/resets";
+import { ExerciseFigure } from "../exercise-figure";
 import { BreathPacer, SessionHeader, useBreathCycle, useWakeLock } from "../breath-pacer";
 import { useToast } from "../toast";
 
@@ -70,6 +71,9 @@ export function PracticeSession() {
       </div>
       {!running && !startedAt ? (
         <ol className="space-y-2.5 rounded-[24px] bg-surface p-4 text-[15px] leading-relaxed shadow-card">
+          <li className="list-none">
+            <ExerciseFigure pose="belly_breath" className="h-32 w-full" />
+          </li>
           {PRACTICE_STEPS.map((s, i) => (
             <li key={s} className="flex gap-3">
               <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-brand/15 text-xs font-semibold text-brand">{i + 1}</span>

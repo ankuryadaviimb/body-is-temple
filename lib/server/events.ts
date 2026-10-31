@@ -234,6 +234,12 @@ export async function patchEvent(
   return updated;
 }
 
+/** Replaces a payload without moving the event (used to correct an auto meal slot). */
+export async function updatePayload(ctx: AuthedContext, id: string, payload: Record<string, unknown>): Promise<void> {
+  const { error } = await ctx.supabase.from("events").update({ payload }).eq("user_id", ctx.userId).eq("id", id);
+  if (error) throw new Error("event_write_failed");
+}
+
 /** Soft delete, so a stale offline retry can never bring a deleted event back. */
 export async function deleteEvent(ctx: AuthedContext, id: string, settings: Settings): Promise<void> {
   const [current] = await getEvents(ctx, [id]);

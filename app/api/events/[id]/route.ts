@@ -23,6 +23,12 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     const patch = await readJson(req, EventPatch, 16_000);
     const settings = await loadSettings(ctx);
     let event = await patchEvent(ctx, id, patch, settings);
+    // A slot picked by hand is final: the AI no longer corrects it.
+    if (event.kind === "meal" && typeof patch.payload?.slot === "string" && event.meta?.slot_locked !== true) {
+      const meta = { ...event.meta, slot_locked: true };
+      await updateMeta(ctx, id, meta);
+      event = { ...event, meta };
+    }
     // A new description for a meal triggers a fresh background analysis.
     if (event.kind === "meal" && typeof patch.payload?.text === "string" && patch.payload.text.trim()) {
       const meta = { ...event.meta, ai_status: "pending" };

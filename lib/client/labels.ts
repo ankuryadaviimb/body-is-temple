@@ -15,7 +15,8 @@ const SLOT_LABEL: Record<string, string> = {
 const DRINK_LABEL: Record<string, string> = {
   tea: "Tea",
   coffee: "Coffee",
-  amla: "Amla juice",
+  amla: "Amla water",
+  chia: "Chia seed water",
   juice: "Juice",
   milk: "Milk",
   buttermilk: "Buttermilk",
@@ -80,7 +81,9 @@ export function eventDetail(e: StoredEvent): string | null {
       const names = a.items
         .map((i) => (i.qty && i.qty > 1 ? `${i.qty} ${i.name}` : i.name))
         .join(", ");
-      return `${names} · about ${a.protein_g.low} to ${a.protein_g.high} g protein`;
+      const mid = (x: { low: number; high: number }) => Math.round((x.low + x.high) / 2);
+      const macros = [`protein ${mid(a.protein_g)} g`, a.carbs_g ? `carbs ${mid(a.carbs_g)} g` : null, a.fiber_g ? `fiber ${mid(a.fiber_g)} g` : null, `${mid(a.kcal)} kcal`].filter(Boolean);
+      return `${names} · about ${macros.join(", ")}`;
     }
     const status = e.meta?.ai_status;
     if (status === "pending") return typeof p.text === "string" ? `"${p.text}" (reading it...)` : "Reading the photo...";

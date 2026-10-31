@@ -10,7 +10,7 @@ import { useToast } from "../toast";
 
 /** Buttons a coach answer can offer. Each maps to a fixed screen or one-tap log, never a URL from the AI. */
 const LINKS: Partial<Record<CoachAction, { href: string; label: string; Icon: typeof SeatIcon }>> = {
-  toilet: { href: "/toilet", label: "Toilet session", Icon: SeatIcon },
+  toilet: { href: "/toilet", label: "Log a toilet visit", Icon: SeatIcon },
   practice: { href: "/practice", label: "Breathing practice", Icon: FeatherIcon },
   reset_heavy: { href: "/reset/heavy", label: "2-minute reset", Icon: FeatherIcon },
   reset_gas: { href: "/reset/gas", label: "Gas relief", Icon: WindIcon },

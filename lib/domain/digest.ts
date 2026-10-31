@@ -1,6 +1,8 @@
 import { isabgolGapAfterDinner, mealSlotOf, ofKind, practiceMinutes, summarizeToilet, waterMl } from "./day";
 import { mealAnalysisOf, payloadOf, type StoredEvent } from "./events";
 import { formatGap } from "./ladder";
+import { about, dailyTargets, dayNutrition, NUTRIENT_LABEL } from "./nutrition";
+import type { Settings } from "./settings";
 import { formatClock, localParts } from "./time";
 
 /**
@@ -14,7 +16,7 @@ function dayName(day: string): string {
   return new Date(`${day}T12:00:00Z`).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" });
 }
 
-export function dayDigest(day: string, events: StoredEvent[], tz: string, label?: string): string {
+export function dayDigest(day: string, events: StoredEvent[], tz: string, label?: string, settings?: Settings): string {
   const parts: string[] = [];
   const wake = ofKind(events, "wake")[0];
   if (wake) parts.push(`woke ${clock(wake.occurred_at, tz)}`);
@@ -50,7 +52,14 @@ export function dayDigest(day: string, events: StoredEvent[], tz: string, label?
     const text = (m.payload as { text?: unknown }).text;
     if (a) {
       const items = a.items.slice(0, 5).map((i) => i.name).join(", ");
-      parts.push(`${slot} ${clock(m.occurred_at, tz)}: ${items} [${a.tags.join(", ")}] protein ~${Math.round((a.protein_g.low + a.protein_g.high) / 2)} g`);
+      const macros = [
+        `protein ~${about(a.protein_g)} g`,
+        a.carbs_g ? `carbs ~${about(a.carbs_g)} g` : null,
+        a.fat_g ? `fat ~${about(a.fat_g)} g` : null,
+        a.fiber_g ? `fiber ~${about(a.fiber_g)} g` : null,
+        `~${about(a.kcal)} kcal`,
+      ].filter(Boolean);
+      parts.push(`${slot} ${clock(m.occurred_at, tz)}: ${items} [${a.tags.join(", ")}] ${macros.join(", ")}`);
     } else {
       parts.push(`${slot} ${clock(m.occurred_at, tz)}: ${typeof text === "string" && text ? text.slice(0, 80) : "photo not analyzed"}`);
     }
@@ -87,6 +96,16 @@ export function dayDigest(day: string, events: StoredEvent[], tz: string, label?
   for (const w of ofKind(events, "weigh_in")) parts.push(`weight ${payloadOf(w, "weigh_in")?.kg} kg`);
   const sleep = ofKind(events, "sleep").at(-1);
   if (sleep) parts.push(`bed ${clock(sleep.occurred_at, tz)}`);
+
+  if (settings) {
+    const n = dayNutrition(events, settings);
+    if (n.analyzed > 0) {
+      const t = dailyTargets(settings);
+      parts.push(
+        `nutrition total: protein ~${about(n.protein)} g${t.protein ? ` of ${t.protein}` : ""}, fiber ~${about(n.fiber)} g of ${t.fiber}, ~${about(n.kcal)} kcal${t.kcal ? ` of ${t.kcal.low} to ${t.kcal.high}` : ""}, veg and fruit ${n.veg + n.fruit} of ${t.plants} servings, nutrients covered: ${n.covered.map((k) => NUTRIENT_LABEL[k]).join(", ") || "none"}`,
+      );
+    }
+  }
 
   const head = `${dayName(day)}${label ? ` (${label})` : ""}`;
   return parts.length ? `${head}: ${parts.join("; ")}` : `${head}: nothing logged`;

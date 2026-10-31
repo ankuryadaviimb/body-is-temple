@@ -1,5 +1,6 @@
 import { lastDinner, ofKind, proteinEstimate } from "../day";
 import { mealAnalysisOf, type StoredEvent } from "../events";
+import { proteinTarget } from "../nutrition";
 import type { Settings } from "../settings";
 import type { ToleranceReport } from "../tolerance";
 import { formatClock, localParts } from "../time";
@@ -15,7 +16,8 @@ export function dinnerAdvice(today: StoredEvent[], settings: Settings, now: Date
   const meals = ofKind(today, "meal");
   const heavyMeals = meals.filter((m) => mealAnalysisOf(m)?.tags.some((t) => HEAVY.has(t)));
   const protein = proteinEstimate(meals);
-  const gap = settings.protein_target_g ? settings.protein_target_g - protein.grams : 0;
+  const goal = proteinTarget(settings);
+  const gap = goal ? goal - protein.grams : 0;
   const local = localParts(now, settings.tz).minutes;
   const late = local >= 21 * 60 + 30 || local < 4 * 60;
   const why: string[] = [];

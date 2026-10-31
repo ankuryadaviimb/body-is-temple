@@ -7,6 +7,7 @@ import {
   waterMl,
 } from "./day";
 import type { StoredEvent } from "./events";
+import { proteinTarget } from "./nutrition";
 import type { Settings } from "./settings";
 import { localParts } from "./time";
 
@@ -55,6 +56,7 @@ export function computeRings(day: StoredEvent[], ctx: RingContext): Ring[] {
   };
 
   const protein = proteinEstimate(day);
+  const proteinGoal = proteinTarget(settings);
   const fuel: Ring = {
     id: "fuel",
     label: "Fuel",
@@ -64,10 +66,7 @@ export function computeRings(day: StoredEvent[], ctx: RingContext): Ring[] {
       {
         id: "protein",
         label: "Protein target (estimate)",
-        done:
-          settings.protein_target_g === null || protein.analyzedMeals === 0
-            ? null
-            : protein.grams >= settings.protein_target_g,
+        done: proteinGoal === null || protein.analyzedMeals === 0 ? null : protein.grams >= proteinGoal,
       },
     ],
   };

@@ -1,9 +1,11 @@
 import "server-only";
 import { env } from "@/lib/env";
-import { payloadOf, type StoredEvent } from "@/lib/domain/events";
+import { mealSlotOf, refineMealSlot } from "@/lib/domain/day";
+import { payloadOf, type MealAnalysis, type MealSlot, type StoredEvent } from "@/lib/domain/events";
+import { localParts } from "@/lib/domain/time";
 import type { Settings } from "@/lib/domain/settings";
 import { readMedia } from "@/lib/server/media";
-import { updateMeta } from "@/lib/server/events";
+import { listEvents, updateMeta, updatePayload } from "@/lib/server/events";
 import type { AuthedContext } from "@/lib/supabase/server";
 import { extractJsonObject } from "./json";
 import { MEAL_SYSTEM_PROMPT, mealUserPrompt, normalizeMealAnalysis } from "./meal-normalize";
@@ -54,6 +56,7 @@ export async function analyzeMealEvent(ctx: AuthedContext, event: StoredEvent, s
       (text) => normalizeMealAnalysis(extractJsonObject(text)) !== null,
     );
     const analysis = normalizeMealAnalysis(extractJsonObject(result.text));
+    if (analysis) await correctSlot(ctx, event, analysis, settings);
     await updateMeta(ctx, event.id, {
       ...event.meta,
       ai_status: analysis ? "done" : "failed",
@@ -66,4 +69,20 @@ export async function analyzeMealEvent(ctx: AuthedContext, event: StoredEvent, s
     console.error(JSON.stringify({ level: "warn", task: "meal_analysis", reason }));
     await updateMeta(ctx, event.id, { ...event.meta, ai_status: "failed" });
   }
+}
+
+/**
+ * Uses the food itself as a second opinion on the meal slot (late breakfast, skipped
+ * breakfast). Never overrides a slot the person picked in the edit sheet.
+ */
+async function correctSlot(ctx: AuthedContext, event: StoredEvent, analysis: MealAnalysis, settings: Settings): Promise<void> {
+  const payload = payloadOf(event, "meal");
+  if (!payload?.slot || event.meta?.slot_locked === true || !analysis.slot_guess) return;
+  const earlier = (await listEvents(ctx, event.logical_day, event.logical_day))
+    .filter((e) => e.kind === "meal" && e.id !== event.id && e.occurred_at < event.occurred_at)
+    .map((e) => mealSlotOf(e))
+    .filter((x): x is MealSlot => x !== null);
+  const minutes = localParts(event.occurred_at, settings.tz).minutes;
+  const next = refineMealSlot(payload.slot, analysis.slot_guess, minutes, earlier);
+  if (next !== payload.slot) await updatePayload(ctx, event.id, { ...event.payload, slot: next });
 }

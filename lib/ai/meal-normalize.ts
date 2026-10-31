@@ -1,13 +1,13 @@
-import { MEAL_SLOTS, MEAL_TAGS, MealAnalysis, type MealSlot } from "@/lib/domain/events";
+import { MEAL_SLOTS, MEAL_TAGS, MealAnalysis, NUTRIENTS, type MealSlot, type Nutrient } from "@/lib/domain/events";
 
 /**
  * Prompt and response normalizer for meal recognition. Pure functions, unit tested.
  * The prompt is generic on purpose: it carries no personal or health information.
  */
 
-export const MEAL_SYSTEM_PROMPT = `You identify food in meal photos or short meal descriptions. Most meals are Indian home food.
+export const MEAL_SYSTEM_PROMPT = `You identify food in meal photos or short meal descriptions and estimate its nutrition. Most meals are Indian home food, often vegetarian.
 Reply with ONLY one JSON object, no other text, in exactly this shape:
-{"items":[{"name":"poha","qty":1,"unit":"plate"}],"tags":["cooked_veg"],"protein_g":{"low":8,"high":12},"kcal":{"low":300,"high":420},"slot_guess":"breakfast","confidence":0.8,"notes":null}
+{"items":[{"name":"poha","qty":1,"unit":"plate"}],"tags":["cooked_veg"],"protein_g":{"low":7,"high":10},"carbs_g":{"low":45,"high":60},"fat_g":{"low":8,"high":12},"fiber_g":{"low":3,"high":5},"kcal":{"low":300,"high":400},"veg_servings":0.5,"fruit_servings":0,"nutrients":["iron"],"slot_guess":"breakfast","confidence":0.8,"notes":null}
 
 Rules:
 - items: each dish or drink you can see or that is described, with a count or portion if clear (qty and unit may be null).
@@ -21,8 +21,10 @@ Rules:
   fruit, ghee (visible ghee or butter), dairy (milk, curd, paneer, buttermilk, cheese), caffeine (tea or coffee),
   high_protein (about 20 g protein or more), sweet (dessert or sugary), packaged (packaged snack or drink),
   large_portion (clearly more than one normal serving).
-- protein_g and kcal: a realistic low to high range for everything listed.
-- slot_guess: one of breakfast, lunch, snack, dinner, late, or null.
+- protein_g, carbs_g, fat_g, fiber_g and kcal: realistic low to high ranges for everything listed, at typical Indian home portions. Keep each range honest (high at most about 1.5 times low).
+- veg_servings and fruit_servings: servings of about 80 g each (potato does not count as a vegetable). Use halves if needed.
+- nutrients: only nutrients this meal is a good source of (about a fifth of a day's need or more), chosen from: iron, calcium, vitamin_c, b12, folate, potassium, magnesium, vitamin_a, zinc, omega3. Empty if none.
+- slot_guess: which meal this food usually is in India: breakfast (poha, upma, idli, dosa, paratha, chilla, oats, eggs, bread), lunch or dinner (dal, rice, roti with sabzi, curry, khichdi), snack (fruit, biscuits, namkeen, tea-time snacks), or null if unclear.
 - confidence: 0 to 1. If the photo is not food, return empty items, empty tags, zero ranges and confidence 0.
 - notes: null, or one short sentence about the food only. Never describe people, places or text that is not about the food.`;
 
@@ -77,11 +79,24 @@ export function normalizeMealAnalysis(raw: unknown): MealAnalysis | null {
     ? (r.slot_guess as MealSlot)
     : null;
 
+  const allowedNutrients = new Set<string>(NUTRIENTS);
+  const nutrients = [
+    ...new Set((Array.isArray(r.nutrients) ? r.nutrients : []).map((n) => String(n).trim().toLowerCase().replace(/[\s-]+/g, "_")).filter((n) => allowedNutrients.has(n))),
+  ] as Nutrient[];
+  const optionalRange = (v: unknown, max: number) => (typeof v === "object" && v !== null ? range(v, max) : undefined);
+  const servings = (v: unknown) => (v === undefined || v === null ? undefined : Math.round(num(v, 0, 10, 0) * 2) / 2);
+
   const candidate = {
     items,
     tags,
     protein_g: range(r.protein_g, 300),
     kcal: range(r.kcal, 5000),
+    carbs_g: optionalRange(r.carbs_g, 800),
+    fat_g: optionalRange(r.fat_g, 400),
+    fiber_g: optionalRange(r.fiber_g, 100),
+    veg_servings: servings(r.veg_servings),
+    fruit_servings: servings(r.fruit_servings),
+    nutrients,
     slot_guess: slot,
     confidence: num(r.confidence, 0, 1, 0.5),
     notes: cleanText(r.notes, 300),

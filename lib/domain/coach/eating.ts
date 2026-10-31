@@ -1,5 +1,6 @@
 import { lastDinner, mainMeals, mealSlotOf, ofKind, proteinEstimate } from "../day";
 import { mealAnalysisOf, type StoredEvent } from "../events";
+import { about, dailyTargets, dayNutrition, gaps, proteinTarget } from "../nutrition";
 import type { Settings } from "../settings";
 import { localParts, minutesBetween } from "../time";
 import { clockOf, joinList, mealItems } from "./facts";
@@ -20,7 +21,7 @@ export function reviewEating(today: StoredEvent[], settings: Settings, now: Date
   const meals = ofKind(today, "meal").filter((m) => minutesBetween(m.occurred_at, now) >= 0);
   const analyzed = meals.filter((m) => mealAnalysisOf(m) !== null);
   const pending = meals.filter((m) => m.meta?.ai_status === "pending").length;
-  const protein = { ...proteinEstimate(meals), target: settings.protein_target_g };
+  const protein = { ...proteinEstimate(meals), target: proteinTarget(settings) };
 
   if (meals.length === 0) {
     return { headline: "No meals logged yet today", wins: [], fixes: [], pending, protein };
@@ -81,6 +82,13 @@ export function reviewEating(today: StoredEvent[], settings: Settings, now: Date
     if (protein.grams >= expected * 0.85) wins.push(`Protein on track: about ${protein.grams} g so far of ${protein.target} g`);
     else fixes.push(`Protein is low: about ${protein.grams} g so far of ${protein.target} g. Add paneer, curd, tofu or dal at the next meal.`);
   }
+
+  // Fiber, vegetables and key nutrients from the photo estimates (protein is handled above).
+  const n = dayNutrition(today, settings);
+  const t = dailyTargets(settings, now);
+  const nutritionGaps = gaps(n, t, now, settings.tz).filter((g) => g.key !== "protein");
+  if (n.macrosKnown && !nutritionGaps.some((g) => g.key === "fiber")) wins.push(`Fiber about ${about(n.fiber)} of ${t.fiber} g so far`);
+  for (const g of nutritionGaps) fixes.push(g.text);
 
   const uniqueFixes = [...new Set(fixes)];
   const headline =

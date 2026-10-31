@@ -9,7 +9,13 @@ export const SettingsSchema = z.strictObject({
   water_target_ml: z.int().min(500).max(6000),
   /** Usual tea size, logged by one tap on the Tea tile. */
   tea_ml: z.int().min(50).max(600),
-  /** Starting protein target; the coach tunes it. Null until weight is known. */
+  /** Usual glass of water (also used for amla and chia seed water). */
+  water_glass_ml: z.int().min(100).max(1000),
+  /** Chia seeds soaked per glass, in tablespoons (for the fiber estimate). */
+  chia_tbsp: z.number().min(0.5).max(4),
+  /** When true, the protein target follows weight and height (see nutrition.ts). */
+  protein_auto: z.boolean(),
+  /** Protein target in grams; set by hand when protein_auto is false. */
   protein_target_g: z.int().min(20).max(300).nullable(),
   steps_target: z.int().min(1000).max(40000).nullable(),
   /** Target bedtime in minutes after local midnight, may exceed 1440 (e.g. 1470 = 12:30 AM). */
@@ -17,6 +23,9 @@ export const SettingsSchema = z.strictObject({
   isabgol_delay_min: z.int().min(30).max(240),
   weight_kg: z.number().min(25).max(300).nullable(),
   height_cm: z.number().min(100).max(250).nullable(),
+  /** Optional, only for the calorie estimate. */
+  birth_year: z.int().min(1920).max(2015).nullable(),
+  sex: z.enum(["male", "female"]).nullable(),
   /** Weekly class schedule: weekday 0 (Sunday) to 6, start in minutes after midnight. */
   classes: z
     .array(
@@ -43,12 +52,17 @@ export const DEFAULT_SETTINGS: Settings = {
   day_start_hour: DEFAULT_DAY_START_HOUR,
   water_target_ml: 2500,
   tea_ml: 300,
+  water_glass_ml: 250,
+  chia_tbsp: 1,
+  protein_auto: true,
   protein_target_g: null,
   steps_target: null,
   bedtime_target_min: 24 * 60 + 30,
   isabgol_delay_min: 90,
   weight_kg: null,
   height_cm: null,
+  birth_year: null,
+  sex: null,
   classes: [],
   max_pushes_per_day: 4,
   quiet_start_min: 23 * 60 + 30,
@@ -67,8 +81,3 @@ export function withDefaults(stored: unknown): Settings {
   return parsed.success ? parsed.data : DEFAULT_SETTINGS;
 }
 
-/** Starting protein target: 1.2 g per kg of body weight, rounded to 5 g. */
-export function startingProteinTarget(weightKg: number | null): number | null {
-  if (!weightKg) return null;
-  return Math.round((weightKg * 1.2) / 5) * 5;
-}

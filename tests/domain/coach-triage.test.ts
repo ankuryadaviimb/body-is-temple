@@ -13,7 +13,7 @@ describe("should I go triage", () => {
     ];
     const r = triage("urge", day, at("2026-11-02 08:20"), TZ);
     expect(r.verdict).toBe("go");
-    expect(r.primary.href).toBe("/toilet");
+    expect(r.primary.href).toBe("/toilet?going=1");
     expect(r.steps.join(" ")).toContain("round 3");
   });
 
@@ -23,7 +23,7 @@ describe("should I go triage", () => {
     expect(r.verdict).toBe("wait");
     expect(r.lead).toContain("25 min ago");
     expect(r.primary.href).toBe("/reset/heavy");
-    expect(r.secondary?.href).toBe("/toilet");
+    expect(r.secondary?.href).toBe("/toilet?going=1");
   });
 
   it("says wait for heaviness after 3 rounds, even hours later", () => {
@@ -51,6 +51,15 @@ describe("should I go triage", () => {
     const r = triage("unsure", day, at("2026-11-02 10:00"), TZ);
     expect(r.verdict).toBe("go");
     expect(r.reasons.join(" ")).toContain("Breakfast 30 min ago");
+  });
+
+  it("tests gas or stool when unsure, away from the best times", () => {
+    const day = [ev("toilet", "2026-11-02 08:00", { duration_s: 200, passed: true })];
+    const r = triage("unsure", day, at("2026-11-02 16:00"), TZ);
+    expect(r.verdict).toBe("reset_first");
+    expect(r.title).toContain("gas or stool");
+    expect(r.primary.href).toBe("/reset/gas");
+    expect(r.steps.join(" ")).toContain("Do not sit on the toilet to push gas out");
   });
 
   it("ignores visits logged in the future", () => {

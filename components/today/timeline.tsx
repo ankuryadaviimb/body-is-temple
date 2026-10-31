@@ -55,7 +55,7 @@ export function Timeline({ events, tz, readOnly = false }: { events: LocalEvent[
                 onClick={() => setEditing(e)}
                 className="flex min-w-0 flex-1 items-start gap-3 py-3.5 pl-4 pr-2 text-left"
               >
-                <EventIcon kind={e.kind as EventKind} size="sm" />
+                <EventIcon kind={e.kind as EventKind} size="sm" drink={typeof e.payload.type === "string" ? e.payload.type : undefined} />
                 <span className="min-w-0 flex-1 pb-1">
                   <span className="flex items-baseline gap-2">
                     <span className="truncate text-[15px] font-semibold">{eventTitle(e)}</span>
@@ -105,7 +105,7 @@ function EditSheet({ event, tz, onClose }: { event: LocalEvent; tz: string; onCl
     const at = localToInstant(p.date, h * 60 + m, tz).toISOString();
     const payload: Record<string, unknown> = {};
     if (event.kind === "meal") {
-      if (slot) payload.slot = slot;
+      if (slot && slot !== event.payload.slot) payload.slot = slot;
       if (text.trim()) payload.text = text.trim().slice(0, 500);
     }
     await updateEvent(event.id, { occurred_at: at, ...(Object.keys(payload).length ? { payload } : {}) });

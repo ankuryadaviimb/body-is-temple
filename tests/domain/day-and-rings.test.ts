@@ -66,7 +66,7 @@ describe("morning liquids", () => {
 });
 
 describe("rings", () => {
-  const settings = { ...DEFAULT_SETTINGS, tz: TZ, protein_target_g: 80 };
+  const settings = { ...DEFAULT_SETTINGS, tz: TZ, protein_auto: false, protein_target_g: 80 };
 
   it("fills gut and fuel segments from logs", () => {
     const day = [

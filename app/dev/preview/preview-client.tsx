@@ -5,6 +5,9 @@ import { BottomNav } from "@/components/bottom-nav";
 import { CoachScreen } from "@/components/coach/coach-screen";
 import { InsightsScreen } from "@/components/insights/insights-screen";
 import { MemoryScreen } from "@/components/memory/memory-screen";
+import { NutritionScreen } from "@/components/nutrition/nutrition-screen";
+import { ExerciseFigure } from "@/components/exercise-figure";
+import type { Pose } from "@/lib/content/poses";
 import { HistoryScreen } from "@/components/history/history-screen";
 import { PracticeSession } from "@/components/practice/practice-session";
 import { ResetRoutineView } from "@/components/reset/reset-routine";
@@ -46,13 +49,19 @@ function sampleDay(day: string, items: [string, EventKind, Record<string, unknow
   });
 }
 
-const meal = (items: string[], tags: string[], protein: [number, number], kcal: [number, number]) => ({
+const meal = (items: string[], tags: string[], protein: [number, number], kcal: [number, number], nutrients: string[] = []) => ({
   ai_status: "done",
   analysis: {
     items: items.map((name) => ({ name, qty: null, unit: null })),
     tags,
     protein_g: { low: protein[0], high: protein[1] },
     kcal: { low: kcal[0], high: kcal[1] },
+    carbs_g: { low: Math.round((kcal[0] * 0.55) / 4), high: Math.round((kcal[1] * 0.55) / 4) },
+    fat_g: { low: Math.round((kcal[0] * 0.25) / 9), high: Math.round((kcal[1] * 0.25) / 9) },
+    fiber_g: { low: tags.includes("cooked_veg") ? 5 : 2, high: tags.includes("cooked_veg") ? 8 : 4 },
+    veg_servings: tags.includes("cooked_veg") ? 1 : 0,
+    fruit_servings: tags.includes("fruit") ? 1 : 0,
+    nutrients,
     slot_guess: null,
     confidence: 0.85,
     notes: null,
@@ -62,16 +71,16 @@ const meal = (items: string[], tags: string[], protein: [number, number], kcal: 
 async function seed() {
   const today = logicalDayFor(new Date().toISOString(), [], TZ);
   const yesterday = addDays(today, -1);
-  const settings = { ...DEFAULT_SETTINGS, tz: TZ, weight_kg: 72, protein_target_g: 85 };
+  const settings = { ...DEFAULT_SETTINGS, tz: TZ, weight_kg: 72, height_cm: 175, birth_year: 1989, sex: "male" as const, protein_target_g: 100 };
   const todayEvents = sampleDay(today, [
     ["08:50", "wake", { mood: 4 }],
     ["08:52", "water", { ml: 250 }],
     ["08:55", "drink", { type: "amla", ml: 30 }],
     ["09:20", "toilet", { duration_s: 260, passed: true, bristol: 4, breath_hold: "no", strain: 1, complete: "yes", satisfaction: 4 }],
     ["09:40", "drink", { type: "tea", ml: 300 }],
-    ["10:05", "meal", { slot: "breakfast" }, meal(["poha", "papaya"], ["cooked_veg", "fruit"], [8, 12], [320, 420])],
+    ["10:05", "meal", { slot: "breakfast" }, meal(["poha", "papaya"], ["cooked_veg", "fruit"], [8, 12], [320, 420], ["iron", "vitamin_c"])],
     ["11:30", "water", { ml: 250 }],
-    ["13:30", "meal", { slot: "lunch" }, meal(["2 roti", "moong dal", "cucumber raita"], ["dal", "dairy", "cooked_veg"], [16, 22], [450, 560])],
+    ["13:30", "meal", { slot: "lunch" }, meal(["2 roti", "moong dal", "cucumber raita"], ["dal", "dairy", "cooked_veg"], [16, 22], [450, 560], ["calcium", "folate"])],
     ["13:55", "walk", { minutes: 10 }],
     ["15:10", "water", { ml: 250 }],
     ["16:00", "practice", { type: "breathing", duration_s: 300 }],
@@ -246,6 +255,10 @@ export function PreviewClient({ screen }: { screen: string }) {
       <InsightsScreen />
     ) : screen === "memory" ? (
       <MemoryScreen />
+    ) : screen === "nutrition" ? (
+      <NutritionScreen />
+    ) : screen === "exercises" ? (
+      <Gallery />
     ) : (
       <TodayScreen />
     );
@@ -256,5 +269,20 @@ export function PreviewClient({ screen }: { screen: string }) {
       <div className={`pt-safe mx-auto min-h-dvh max-w-md px-4 ${focus ? "pb-safe" : "pb-32"}`}>{body}</div>
       {!focus ? <BottomNav /> : null}
     </ToastProvider>
+  );
+}
+
+const POSES: Pose[] = ["toilet", "figure4", "gravity_drain", "squeeze_drop", "hips_up", "knees_to_chest", "belly_circles", "left_side", "belly_breath"];
+
+function Gallery() {
+  return (
+    <main className="grid grid-cols-2 gap-3 pt-4">
+      {POSES.map((p) => (
+        <figure key={p} className="rounded-[22px] bg-surface p-2 shadow-card">
+          <ExerciseFigure pose={p} className="h-28 w-full" />
+          <figcaption className="pb-1 text-center text-[12px] text-ink-3">{p}</figcaption>
+        </figure>
+      ))}
+    </main>
   );
 }

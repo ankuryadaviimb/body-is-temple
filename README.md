@@ -3,7 +3,10 @@
 A private, self-hosted gut and fitness coach for iPhone, built as a Home Screen web app.
 It is designed around one rule: logging must take seconds, or people stop doing it.
 
-- **One-tap logging:** meals by photo, toilet visits with a breathing guide and a 5-minute timer, water, tea, Isabgol, gas, walks and workouts.
+- **One-tap logging:** meals by photo, toilet visits, water (your own glass size), tea (your own cup), amla and chia seed water, Isabgol, gas, walks and workouts.
+- **Toilet visits without the phone inside:** "I just went" (when and about how long, then a few taps), or "Going now" (the start time is saved, rate it when you are back). A breathing guide is there for anyone who does take the phone in.
+- **Nutrition from photos:** each meal gets estimated protein, carbs, fat, fiber, calories, vegetable and fruit servings, and key nutrients (iron, calcium, vitamin C, B12, folate, potassium). "Fuel today" shows totals against your targets and what is still behind. Protein follows your weight and height (1.4 g per kg, capped at the healthy weight for your height); calories need birth year and sex, both optional. The meal type also follows the food itself, so a late breakfast stays breakfast.
+- **Animated how-to drawings** for every reset and the breathing practice (SVG, no video, works offline).
 - **Instant feedback:** quick feedback comes from rules on the phone. AI analysis runs in the background, so no screen ever waits on a model.
 - **Four rings (Gut, Fuel, Move, Rest)** fill only for actions you control. A forgiving streak means one missed day never breaks it.
 - **A weekly habit ladder** adds one new gut habit and one movement or food habit at a time.

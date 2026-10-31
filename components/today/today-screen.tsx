@@ -8,6 +8,7 @@ import { timeLabel } from "@/lib/client/labels";
 import { dayEvents, logEvent, updateEvent } from "@/lib/client/log";
 import { usePendingDeletes } from "@/lib/client/pending-delete";
 import { refreshFromServer } from "@/lib/client/sync";
+import { useOpenVisit } from "@/lib/client/toilet-visit";
 import { mainMeals, ofKind, waterMl } from "@/lib/domain/day";
 import { mealAnalysisOf, payloadOf } from "@/lib/domain/events";
 import { buildMorningCard, LADDER } from "@/lib/domain/ladder";
@@ -29,6 +30,7 @@ import {
   SpoonIcon,
   SunIcon,
   WalkIcon,
+  SeedsIcon,
   WindIcon,
 } from "../icons";
 import { Sheet } from "../sheet";
@@ -37,10 +39,11 @@ import { GasSheet } from "../gas-sheet";
 import { useToast } from "../toast";
 import { AskCard } from "./ask-card";
 import { CoachCardView } from "./coach-card";
+import { FuelCard } from "./fuel-card";
 import { MealTile } from "./meal-button";
 import { MorningCardView } from "./morning-card";
 import { MoreSheet } from "./more-sheet";
-import { NextUpCard } from "./next-up-card";
+import { BackFromToiletCard, NextUpCard } from "./next-up-card";
 import { CornerPill, ProgressBar, RailButton, SectionTitle, Tile } from "./quick-tiles";
 import { RingsHero } from "./rings-hero";
 import { Timeline } from "./timeline";
@@ -56,8 +59,21 @@ function weekdayOf(day: string): number {
 function greeting(minutes: number): string {
   if (minutes >= 4 * 60 && minutes < 12 * 60) return "Good morning";
   if (minutes >= 12 * 60 && minutes < 17 * 60) return "Good afternoon";
+  if (minutes < 4 * 60) return "Up late";
   return "Good evening";
 }
+
+function weekdayName(day: string): string {
+  return new Date(`${day}T12:00:00Z`).toLocaleDateString("en-IN", { weekday: "long", timeZone: "UTC" });
+}
+
+const GLASS_SIZES = [
+  { ml: 200, label: "Small glass" },
+  { ml: 250, label: "Glass" },
+  { ml: 300, label: "Tall glass" },
+  { ml: 400, label: "Large glass" },
+  { ml: 500, label: "Bottle" },
+];
 
 const TEA_SIZES = [
   { ml: 150, label: "Small cup" },
@@ -77,8 +93,10 @@ export function TodayScreen() {
   const [moreOpen, setMoreOpen] = useState(false);
   const [gasOpen, setGasOpen] = useState(false);
   const [teaOpen, setTeaOpen] = useState(false);
+  const [glassOpen, setGlassOpen] = useState(false);
   const [moodFor, setMoodFor] = useState<string | null>(null);
   const [triageOpen, setTriageOpen] = useState(false);
+  const openVisit = useOpenVisit();
 
   const events = useMemo(() => rawEvents?.filter((e) => !pendingDeletes.has(e.id)), [rawEvents, pendingDeletes]);
   const ladderIndex = snapshot?.ladder.index ?? 0;
@@ -127,7 +145,9 @@ export function TodayScreen() {
 
   if (!today || !events || !rings) return <TodaySkeleton />;
 
-  const nowMinutes = localParts(new Date(), settings.tz).minutes;
+  const nowParts = localParts(new Date(), settings.tz);
+  const nowMinutes = nowParts.minutes;
+  const calendarDay = nowParts.date;
   const wake = ofKind(events, "wake")[0];
   const hasSleep = events.some((e) => e.kind === "sleep");
   const nightTime = nowMinutes >= 21 * 60 || nowMinutes < settings.day_start_hour * 60;
@@ -139,26 +159,37 @@ export function TodayScreen() {
   const water = waterMl(events);
   const teas = ofKind(events, "drink").filter((e) => payloadOf(e, "drink")?.type === "tea");
 
-  async function quickLog(kind: "water" | "tea" | "isabgol" | "amla" | "walk", teaMl = settings.tea_ml) {
+  async function quickLog(kind: "water" | "tea" | "isabgol" | "amla" | "chia" | "walk", sizeMl?: number) {
+    const glass = sizeMl ?? settings.water_glass_ml;
+    const teaMl = sizeMl ?? settings.tea_ml;
     const result =
       kind === "water"
-        ? await logEvent("water", { ml: 250 })
+        ? await logEvent("water", { ml: glass })
         : kind === "tea"
           ? await logEvent("drink", { type: "tea", ml: teaMl })
           : kind === "amla"
-            ? await logEvent("drink", { type: "amla", ml: 30 })
-            : kind === "walk"
-              ? await logEvent("walk", { minutes: 10 })
-              : await logEvent("isabgol", { tsp: 1, water_ml: 200 });
-    const sameKind = (await dayEvents(result.event.logical_day)).filter((e) => e.kind === "water").length;
+            ? await logEvent("drink", { type: "amla", ml: glass })
+            : kind === "chia"
+              ? await logEvent("drink", { type: "chia", ml: glass })
+              : kind === "walk"
+                ? await logEvent("walk", { minutes: 10 })
+                : await logEvent("isabgol", { tsp: 1, water_ml: 200 });
+    const total = waterMl(await dayEvents(result.event.logical_day)).toLocaleString("en-IN");
     const fallback: Record<typeof kind, string> = {
-      water: `Water logged · ${(sameKind * 250).toLocaleString("en-IN")} ml today`,
+      water: `Water logged · ${total} ml today`,
       tea: `Tea logged · ${teaMl} ml`,
-      amla: "Amla logged.",
+      amla: `Amla in a glass of water · ${total} ml today`,
+      chia: `Chia seed water · ${total} ml today`,
       walk: "10-minute walk logged.",
       isabgol: "Isabgol logged.",
     };
     logged(result, fallback[kind]);
+  }
+
+  async function makeUsual(key: "tea_ml" | "water_glass_ml", ml: number) {
+    if (ml === settings[key]) return;
+    await apiSend("PUT", "/api/settings", { [key]: ml }).catch(() => undefined);
+    await refreshFromServer();
   }
 
   async function goodMorning() {
@@ -178,8 +209,11 @@ export function TodayScreen() {
     <main className="fade-in flex flex-col gap-6 pt-2">
       <header className="flex items-end justify-between gap-3">
         <div className="min-w-0">
-          <p className="text-[13px] font-semibold uppercase tracking-wide text-ink-3">{dateLabel(today)}</p>
+          <p className="text-[13px] font-semibold uppercase tracking-wide text-ink-3">{dateLabel(calendarDay)}</p>
           <h1 className="mt-1 text-[32px] font-bold leading-tight tracking-tight">{greeting(nowMinutes)}</h1>
+          {calendarDay !== today ? (
+            <p className="mt-1 text-[13px] leading-snug text-ink-2">Logs until you wake up still count toward {weekdayName(today)}.</p>
+          ) : null}
         </div>
         <div className="flex shrink-0 items-center gap-2 pb-1.5">
           {!sync.online || sync.pending > 0 ? (
@@ -240,7 +274,7 @@ export function TodayScreen() {
 
       <RingsHero rings={rings} />
 
-      {nudge ? <NextUpCard nudge={nudge} /> : null}
+      {openVisit ? <BackFromToiletCard startedAt={openVisit.startedAt} now={new Date()} /> : nudge ? <NextUpCard nudge={nudge} /> : null}
 
       {coachCard && morning ? <CoachCardView card={coachCard} /> : null}
 
@@ -256,7 +290,7 @@ export function TodayScreen() {
           <MealTile
             sub={
               meals.length > 0
-                ? `${meals.length} of 3 meals${lastMeal ? ` · ${timeLabel(lastMeal, settings.tz)}` : ""}`
+                ? `${meals.length} ${meals.length === 1 ? "meal" : "meals"}${lastMeal ? ` · last ${timeLabel(lastMeal, settings.tz)}` : ""}`
                 : "Snap your first meal"
             }
           />
@@ -265,8 +299,8 @@ export function TodayScreen() {
             icon={<SeatIcon className="size-6" />}
             tint="bg-gut/15 text-gut"
             title="Toilet"
-            sub={lastVisit ? `${visits.length} today · last ${timeLabel(lastVisit, settings.tz)}` : "Start a guided session"}
-            label="Start a toilet session"
+            sub={lastVisit ? `${visits.length} today · last ${timeLabel(lastVisit, settings.tz)}` : "Log before or after"}
+            label="Log a toilet visit"
           />
           <Tile
             onClick={() => void quickLog("water")}
@@ -274,8 +308,12 @@ export function TodayScreen() {
             tint="bg-rest/15 text-rest"
             title="Water"
             sub={`${water.toLocaleString("en-IN")} of ${settings.water_target_ml.toLocaleString("en-IN")} ml`}
-            label="Log a glass of water, 250 ml"
-            corner={<span className="rounded-full bg-surface-2 px-2.5 py-1.5 text-xs font-semibold text-ink-2">+250</span>}
+            label={`Log a glass of water, ${settings.water_glass_ml} ml`}
+            corner={
+              <CornerPill onClick={() => setGlassOpen(true)} label="Change glass size">
+                {settings.water_glass_ml} ml
+              </CornerPill>
+            }
             footer={<ProgressBar value={water} max={settings.water_target_ml} colorClass="text-rest" />}
           />
           <Tile
@@ -297,12 +335,15 @@ export function TodayScreen() {
         <div className="no-scrollbar mt-4 flex justify-between gap-1 overflow-x-auto pb-1">
           <RailButton onClick={() => void quickLog("isabgol")} icon={<SpoonIcon className="size-6" />} tint="bg-gut/15 text-gut" label="Isabgol" />
           <RailButton onClick={() => void quickLog("amla")} icon={<LeafIcon className="size-6" />} tint="bg-move/15 text-move" label="Amla" />
+          <RailButton onClick={() => void quickLog("chia")} icon={<SeedsIcon className="size-6" />} tint="bg-rest/15 text-rest" label="Chia" />
           <RailButton onClick={() => void quickLog("walk")} icon={<WalkIcon className="size-6" />} tint="bg-move/15 text-move" label="Walk" />
           <RailButton href="/practice" icon={<FeatherIcon className="size-6" />} tint="bg-gut/15 text-gut" label="Breathe" />
           <RailButton onClick={() => setGasOpen(true)} icon={<WindIcon className="size-6" />} tint="bg-surface text-ink-2 shadow-card" label="Gas" />
           <RailButton onClick={() => setMoreOpen(true)} icon={<DotsIcon className="size-6" />} tint="bg-surface text-ink-2 shadow-card" label="More" />
         </div>
       </section>
+
+      <FuelCard events={events} settings={settings} />
 
       {coachCard && !morning ? <CoachCardView card={coachCard} /> : null}
 
@@ -354,6 +395,26 @@ export function TodayScreen() {
       <MoreSheet open={moreOpen} onClose={() => setMoreOpen(false)} />
       <GasSheet open={gasOpen} onClose={() => setGasOpen(false)} />
       <TriageSheet open={triageOpen} onClose={() => setTriageOpen(false)} />
+      <Sheet open={glassOpen} title="Which glass?" onClose={() => setGlassOpen(false)}>
+        <p className="mb-4 text-sm leading-relaxed text-ink-2">Logs this glass now and makes it your usual, for water, amla and chia water.</p>
+        <div className="flex flex-col gap-2">
+          {GLASS_SIZES.map((g) => (
+            <button
+              key={g.ml}
+              type="button"
+              onClick={async () => {
+                setGlassOpen(false);
+                await quickLog("water", g.ml);
+                await makeUsual("water_glass_ml", g.ml);
+              }}
+              className={`pressable flex h-14 items-center justify-between rounded-2xl px-4 text-[15px] font-semibold ${g.ml === settings.water_glass_ml ? "bg-brand text-brand-ink" : "bg-surface-2"}`}
+            >
+              <span>{g.label}</span>
+              <span className="tabular font-medium opacity-80">{g.ml} ml</span>
+            </button>
+          ))}
+        </div>
+      </Sheet>
       <Sheet open={teaOpen} title="Which cup?" onClose={() => setTeaOpen(false)}>
         <p className="mb-4 text-sm leading-relaxed text-ink-2">Logs this cup now and makes it your usual, so one tap on Tea logs it next time.</p>
         <div className="flex flex-col gap-2">
@@ -364,10 +425,7 @@ export function TodayScreen() {
               onClick={async () => {
                 setTeaOpen(false);
                 await quickLog("tea", c.ml);
-                if (c.ml !== settings.tea_ml) {
-                  await apiSend("PUT", "/api/settings", { tea_ml: c.ml }).catch(() => undefined);
-                  await refreshFromServer();
-                }
+                await makeUsual("tea_ml", c.ml);
               }}
               className={`pressable flex h-14 items-center justify-between rounded-2xl px-4 text-[15px] font-semibold ${c.ml === settings.tea_ml ? "bg-brand text-brand-ink" : "bg-surface-2"}`}
             >

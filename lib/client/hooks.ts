@@ -2,9 +2,10 @@
 
 import { useLiveQuery } from "dexie-react-hooks";
 import { useEffect, useMemo, useState } from "react";
-import { DEFAULT_SETTINGS, type Settings } from "@/lib/domain/settings";
+import { withDefaults, type Settings } from "@/lib/domain/settings";
 import type { CachedSnapshot } from "@/lib/domain/snapshot";
 import { db, kvGet, type LocalEvent } from "./db";
+import { deviceSettings } from "./device";
 import { todayLocal } from "./log";
 import { onSyncState, type SyncState } from "./sync";
 
@@ -13,7 +14,9 @@ export function useSnapshot(): CachedSnapshot | undefined {
 }
 
 export function useSettings(): Settings {
-  return useSnapshot()?.settings ?? DEFAULT_SETTINGS;
+  const stored = useSnapshot()?.settings;
+  // Older cached copies may miss newer fields, so fill them in.
+  return useMemo(() => (stored ? withDefaults(stored) : deviceSettings()), [stored]);
 }
 
 /** The current logical day, recomputed every minute and whenever wake/sleep events change. */

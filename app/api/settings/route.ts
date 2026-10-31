@@ -1,4 +1,5 @@
-import { SettingsUpdate, startingProteinTarget } from "@/lib/domain/settings";
+import { autoProtein } from "@/lib/domain/nutrition";
+import { SettingsUpdate } from "@/lib/domain/settings";
 import { assertWriteAllowed, handleError, json, readJson } from "@/lib/http/guard";
 import { loadSettings, saveSettings } from "@/lib/server/settings";
 import { requireUser } from "@/lib/supabase/server";
@@ -20,9 +21,8 @@ export async function PUT(req: Request) {
     const update = await readJson(req, SettingsUpdate, 16_000);
     const current = await loadSettings(ctx);
     const next = { ...current, ...update };
-    if (update.weight_kg !== undefined && update.protein_target_g === undefined && current.protein_target_g === null) {
-      next.protein_target_g = startingProteinTarget(next.weight_kg);
-    }
+    // Auto protein follows weight and height; a custom target stays as typed.
+    if (next.protein_auto) next.protein_target_g = autoProtein(next.weight_kg, next.height_cm)?.grams ?? null;
     return json({ settings: await saveSettings(ctx, next) });
   } catch (err) {
     return handleError(err, "settings.put");
