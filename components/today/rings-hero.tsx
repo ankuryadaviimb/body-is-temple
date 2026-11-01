@@ -5,8 +5,8 @@ import { ringProgress, type Ring } from "@/lib/domain/rings";
 import { CheckIcon, ChevronRightIcon } from "../icons";
 import { Sheet } from "../sheet";
 
-const TEXT: Record<Ring["id"], string> = { gut: "text-gut", fuel: "text-fuel", move: "text-move", rest: "text-rest" };
-const DOT: Record<Ring["id"], string> = { gut: "bg-gut", fuel: "bg-fuel", move: "bg-move", rest: "bg-rest" };
+const TEXT: Record<Ring["id"], string> = { gut: "text-ring-gut", fuel: "text-ring-fuel", move: "text-ring-move", rest: "text-ring-rest" };
+const DOT: Record<Ring["id"], string> = { gut: "bg-ring-gut", fuel: "bg-ring-fuel", move: "bg-ring-move", rest: "bg-ring-rest" };
 
 const RADII = [50, 39, 28, 17];
 const STROKE = 9;

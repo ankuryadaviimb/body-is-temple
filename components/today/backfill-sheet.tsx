@@ -6,7 +6,7 @@ import { useSettings } from "@/lib/client/hooks";
 import { logEvent } from "@/lib/client/log";
 import { prepareMealPhoto } from "@/lib/client/photo";
 import { MEAL_SLOTS, type MealSlot } from "@/lib/domain/events";
-import { localParts } from "@/lib/domain/time";
+import { addDays, localParts } from "@/lib/domain/time";
 import { defaultWhen, describeWhen, resolveWhen, timeOf, type WhenValue } from "@/lib/domain/when";
 import { CupIcon, DropIcon, DumbbellIcon, ImageIcon, LeafIcon, PlateIcon, SeatIcon, SeedsIcon, SpoonIcon, WalkIcon, WindIcon } from "../icons";
 import { Choice, Sheet } from "../sheet";
@@ -80,11 +80,13 @@ function Backfill({ onClose }: { onClose: () => void }) {
     try {
       const { blob, takenAt } = await prepareMealPhoto(file, false);
       setPhoto(blob);
-      // A photo's own time is the best guess for when the meal happened.
+      // A photo's own time is the best guess for when the meal happened, when that is today
+      // or yesterday (the days an earlier entry can go on). An older photo keeps the time set here.
       if (takenAt) {
         const p = localParts(takenAt, settings.tz);
         const today = localParts(new Date(), settings.tz).date;
-        if (Date.now() - takenAt.getTime() < 36 * 3_600_000) setWhen({ day: p.date === today ? "today" : "yesterday", time: timeOf(p.minutes) });
+        if (p.date === today || p.date === addDays(today, -1)) setWhen({ day: p.date === today ? "today" : "yesterday", time: timeOf(p.minutes) });
+        else show("This photo is from an earlier day, so its time was not used. Pick the time below.", "tip");
       }
     } catch {
       show("Could not read that photo. Try another one, or just type the meal.", "tip");
@@ -107,19 +109,19 @@ function Backfill({ onClose }: { onClose: () => void }) {
         };
         logged(await logEvent("meal", payload, { at, ...(photo ? { photo } : {}) }), `Meal saved for ${label}. Details appear in a few seconds.`);
       } else if (kind === "water") {
-        logged(await logEvent("water", { ml: Math.min(2000, count * glass) }), `Water ${count * glass} ml saved for ${label}.`);
+        logged(await logEvent("water", { ml: Math.min(2000, count * glass) }, { at }), `Water ${count * glass} ml saved for ${label}.`);
       } else if (kind === "tea") {
-        logged(await logEvent("drink", { type: "tea", ml: Math.min(2000, count * cup) }), `Tea saved for ${label}.`);
+        logged(await logEvent("drink", { type: "tea", ml: Math.min(2000, count * cup) }, { at }), `Tea saved for ${label}.`);
       } else if (kind === "amla" || kind === "chia") {
-        logged(await logEvent("drink", { type: kind, ml: Math.min(2000, count * glass) }), `${kind === "amla" ? "Amla" : "Chia"} water saved for ${label}.`);
+        logged(await logEvent("drink", { type: kind, ml: Math.min(2000, count * glass) }, { at }), `${kind === "amla" ? "Amla" : "Chia"} water saved for ${label}.`);
       } else if (kind === "isabgol") {
-        logged(await logEvent("isabgol", { tsp, water_ml: 200 }), `Isabgol saved for ${label}.`);
+        logged(await logEvent("isabgol", { tsp, water_ml: 200 }, { at }), `Isabgol saved for ${label}.`);
       } else if (kind === "walk") {
-        logged(await logEvent("walk", { minutes }), `Walk saved for ${label}.`);
+        logged(await logEvent("walk", { minutes }, { at }), `Walk saved for ${label}.`);
       } else if (kind === "gas" && gas !== undefined) {
-        logged(await logEvent("gas", { level: gas }), `Gas ${gas} of 4 saved for ${label}.`);
+        logged(await logEvent("gas", { level: gas }, { at }), `Gas ${gas} of 4 saved for ${label}.`);
       } else if (kind === "workout") {
-        logged(await logEvent("workout", { type: text.trim().slice(0, 60), duration_min: minutes }), `Workout saved for ${label}.`);
+        logged(await logEvent("workout", { type: text.trim().slice(0, 60), duration_min: minutes }, { at }), `Workout saved for ${label}.`);
       }
       onClose();
     } finally {

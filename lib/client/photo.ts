@@ -44,12 +44,12 @@ async function decode(file: File): Promise<ImageBitmap | HTMLImageElement> {
   }
 }
 
-export async function shrinkPhoto(file: File): Promise<Blob> {
+export async function shrinkPhoto(file: File, maxEdge = MAX_EDGE, quality = 0.82): Promise<Blob> {
   const source = await decode(file);
   const w = "width" in source ? source.width : 0;
   const h = "height" in source ? source.height : 0;
   if (!w || !h) throw new Error("Could not read photo");
-  const scale = Math.min(1, MAX_EDGE / Math.max(w, h));
+  const scale = Math.min(1, maxEdge / Math.max(w, h));
   const canvas = document.createElement("canvas");
   canvas.width = Math.round(w * scale);
   canvas.height = Math.round(h * scale);
@@ -57,7 +57,7 @@ export async function shrinkPhoto(file: File): Promise<Blob> {
   if (!ctx) throw new Error("Canvas not available");
   ctx.drawImage(source as CanvasImageSource, 0, 0, canvas.width, canvas.height);
   if ("close" in source && typeof source.close === "function") source.close();
-  const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.82));
+  const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", quality));
   if (!blob) throw new Error("Could not encode photo");
   return blob;
 }
@@ -65,4 +65,9 @@ export async function shrinkPhoto(file: File): Promise<Blob> {
 export async function prepareMealPhoto(file: File, fromCamera: boolean): Promise<{ blob: Blob; takenAt: Date | null }> {
   const [blob, takenAt] = await Promise.all([shrinkPhoto(file), fromCamera ? Promise.resolve(null) : readTakenAt(file)]);
   return { blob, takenAt };
+}
+
+/** Photos of reports keep more detail (small print), but are re-encoded the same way. */
+export async function prepareDocumentPhoto(file: File): Promise<Blob> {
+  return shrinkPhoto(file, 2400, 0.9);
 }

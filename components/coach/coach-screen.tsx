@@ -1,12 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { askCoach, deleteCoachMessage, refreshCoach, refreshInsights, refreshMemory, retryCoach, useCoachMessages, useInsights, useMemory } from "@/lib/client/coach";
-import { COACH_CHIPS, chipFor, classifyIntent, type CoachChip } from "@/lib/domain/coach/intents";
+import { askCoach, deleteCoachMessage, refreshCoach, refreshInsights, refreshMemory, retryCoach, takePendingAsk, useCoachMessages, useInsights, useMemory } from "@/lib/client/coach";
+import { COACH_CHIPS, classifyIntent, type CoachChip } from "@/lib/domain/coach/intents";
 import type { CoachMessage } from "@/lib/domain/coach/message";
-import { BookIcon, ChartIcon, ChevronRightIcon, FeatherIcon, PlateIcon, SeatIcon, SendIcon, SpoonIcon, SunIcon, TrashIcon, WindIcon } from "../icons";
+import { BookIcon, ChartIcon, NoteIcon, ChevronRightIcon, FeatherIcon, PlateIcon, SeatIcon, SendIcon, SpoonIcon, SunIcon, TrashIcon, WindIcon } from "../icons";
 import { SectionTitle } from "../today/quick-tiles";
 import { useToast } from "../toast";
 import { AnswerView } from "./answer-view";
@@ -29,14 +28,12 @@ function when(iso: string): string {
     : d.toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short" });
 }
 
-export function CoachScreen({ initialAsk }: { initialAsk?: string }) {
-  const router = useRouter();
+export function CoachScreen() {
   const messages = useCoachMessages();
   const insights = useInsights();
   const memory = useMemory();
   const { show } = useToast();
-  const startChip = initialAsk ? chipFor(initialAsk as CoachChip["intent"]) : undefined;
-  const [triageOpen, setTriageOpen] = useState(startChip?.intent === "should_go");
+  const [triageOpen, setTriageOpen] = useState(false);
   const [text, setText] = useState("");
   const [openId, setOpenId] = useState<string | null>(null);
   const asked = useRef(false);
@@ -48,13 +45,17 @@ export function CoachScreen({ initialAsk }: { initialAsk?: string }) {
     void refreshMemory();
   }, []);
 
-  // A chip tapped on Today arrives as ?ask=<intent>: ask once, then drop the parameter.
+  // A chip tapped on Today leaves a short-lived note on this phone; ask it once. (Not a URL
+  // parameter, so a link from another site cannot spend a question.)
   useEffect(() => {
-    if (!initialAsk || asked.current) return;
+    if (asked.current) return;
     asked.current = true;
-    if (startChip && startChip.intent !== "should_go") void askCoach(startChip.question, startChip.intent);
-    router.replace("/coach");
-  }, [initialAsk, startChip, router]);
+    void takePendingAsk().then((chip) => {
+      if (!chip) return;
+      if (chip.intent === "should_go") setTriageOpen(true);
+      else void askCoach(chip.question, chip.intent);
+    });
+  }, []);
 
   async function ask(question: string, chip?: CoachChip) {
     const q = question.trim();
@@ -151,6 +152,7 @@ export function CoachScreen({ initialAsk }: { initialAsk?: string }) {
           sub={insights ? (findings > 0 ? `${findings} ${findings === 1 ? "pattern" : "patterns"} so far` : `Learning ${learning} foods and habits`) : "Patterns from your logs"}
         />
         <LinkRow href="/memory" Icon={BookIcon} tint="bg-rest/15 text-rest" title="What Temple knows about you" sub={memory ? `${notes} ${notes === 1 ? "note" : "notes"}, edit any time` : "Your notes"} />
+        <LinkRow href="/records" Icon={NoteIcon} tint="bg-gut/15 text-gut" title="Health records" sub="Blood reports, consultations, prescriptions" />
       </section>
 
       {earlier.length > 0 ? (

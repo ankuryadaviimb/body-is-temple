@@ -1,14 +1,14 @@
 "use client";
 
 import { useLiveQuery } from "dexie-react-hooks";
-import { classifyIntent, type CoachIntent } from "@/lib/domain/coach/intents";
+import { chipFor, classifyIntent, type CoachChip, type CoachIntent } from "@/lib/domain/coach/intents";
 import type { CoachMessage } from "@/lib/domain/coach/message";
 import { quickTake } from "@/lib/domain/coach/quick";
 import type { MemoryFile, MemorySlug } from "@/lib/domain/memory";
 import { addDays } from "@/lib/domain/time";
 import type { ToleranceReport } from "@/lib/domain/tolerance";
 import { apiGet, apiSend } from "./api";
-import { kvGet, kvSet } from "./db";
+import { db, kvGet, kvSet } from "./db";
 import { currentSettings, dayEvents, todayLocal } from "./log";
 
 /**
@@ -149,4 +149,20 @@ export async function saveMemoryNote(slug: MemorySlug, content: string): Promise
 export async function rememberFact(text: string): Promise<void> {
   const { files } = await apiSend<{ files: MemoryFile[] }>("POST", "/api/memory", { text });
   await kvSet(MEMORY, files);
+}
+
+const PENDING_ASK = "pending_ask";
+
+/** Today's quick chips: remember the question for the Coach screen to ask on open. */
+export async function queueAsk(intent: CoachChip["intent"]): Promise<void> {
+  await kvSet(PENDING_ASK, { intent, at: Date.now() });
+}
+
+/** The queued question, if it was left in the last 30 seconds; it is used once. */
+export async function takePendingAsk(): Promise<CoachChip | null> {
+  const pending = await kvGet<{ intent: CoachChip["intent"]; at: number }>(PENDING_ASK);
+  if (!pending) return null;
+  await db().kv.delete(PENDING_ASK);
+  if (Date.now() - pending.at > 30_000) return null;
+  return chipFor(pending.intent) ?? null;
 }

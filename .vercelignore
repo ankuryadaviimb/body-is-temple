@@ -8,3 +8,7 @@ exports/
 node_modules/
 .next/
 tsconfig.tsbuildinfo
+
+# Local Supabase CLI state and Vercel project link
+supabase/.temp/
+.vercel/

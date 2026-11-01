@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { isAllowedEmail } from "@/lib/env";
-import { assertWriteAllowed, clientIp, handleError, HttpError, json, rateLimit, readJson } from "@/lib/http/guard";
+import { assertWriteAllowed, clientIp, handleError, HttpError, json, rateLimit, readJson, steadyTiming } from "@/lib/http/guard";
 import { supabaseServer } from "@/lib/supabase/server";
 
 const Body = z.strictObject({
@@ -12,6 +12,8 @@ const FAILED = "Email or password is not right, or the email is not confirmed ye
 
 /** Email and password sign-in. On success the session is set as HttpOnly cookies. */
 export async function POST(req: Request) {
+  const started = Date.now();
+  let res: Response;
   try {
     assertWriteAllowed(req);
     rateLimit(`sign-in:${clientIp(req)}`, 10, 15 * 60_000);
@@ -20,8 +22,10 @@ export async function POST(req: Request) {
     const supabase = await supabaseServer();
     const { error } = await supabase.auth.signInWithPassword({ email: email.trim().toLowerCase(), password });
     if (error) throw new HttpError(401, FAILED);
-    return json({ ok: true });
+    res = json({ ok: true });
   } catch (err) {
-    return handleError(err, "sign-in");
+    res = handleError(err, "sign-in");
   }
+  await steadyTiming(started);
+  return res;
 }

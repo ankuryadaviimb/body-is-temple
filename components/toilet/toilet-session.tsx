@@ -73,7 +73,7 @@ function Flow({ back, earlier, openStartedAt }: { back: boolean; earlier: boolea
   const [when, setWhen] = useState<WhenValue>(() => defaultWhen(settings.tz, new Date(), 60));
   const today = useToday();
   const events = useDayEvents(today);
-  const { logged } = useToast();
+  const { logged, show } = useToast();
   const resuming = back && openStartedAt !== null;
   const [stage, setStage] = useState<Stage>(resuming ? "rate" : earlier ? "when" : openStartedAt ? "away" : "choose");
   const [ago, setAgo] = useState(earlier ? -1 : 0);
@@ -133,14 +133,20 @@ function Flow({ back, earlier, openStartedAt }: { back: boolean; earlier: boolea
           ? resolveWhen(when, settings.tz)
           : new Date(Date.now() - ago * 60_000 - length * 1000);
     const payload: Payload<"toilet"> = {
-      duration_s: guided ? Math.round(elapsed / 1000) : length,
+      duration_s: Math.min(3600, guided ? Math.round(elapsed / 1000) : length),
       passed,
-      ...(guided ? { breaths } : {}),
+      ...(guided ? { breaths: Math.min(500, breaths) } : {}),
       ...values,
       ...(passed ? {} : { bristol: undefined, complete: undefined }),
     };
     const clean = Object.fromEntries(Object.entries(payload).filter(([, v]) => v !== undefined)) as Payload<"toilet">;
-    logged(await logEvent("toilet", clean, { at }), "Toilet visit saved.");
+    try {
+      logged(await logEvent("toilet", clean, { at }), "Toilet visit saved.");
+    } catch {
+      setSaving(false);
+      show("Could not save this visit. Check the time and try again.", "tip");
+      return;
+    }
     router.push("/");
     void clearVisit();
   }

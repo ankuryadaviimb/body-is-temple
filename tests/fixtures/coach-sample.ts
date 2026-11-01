@@ -63,5 +63,5 @@ export function sampleData(): CoachData {
     { slug: "questions", content: "- Sample question for the doctor.", version: 1, updated_at: "" },
   ];
   const finished = new Map([...byDay].filter(([d]) => d < SAMPLE_TODAY));
-  return { byDay, memory, tolerance: computeTolerance(finished, SAMPLE_SETTINGS) };
+  return { byDay, memory, tolerance: computeTolerance(finished, SAMPLE_SETTINGS), labs: [] };
 }

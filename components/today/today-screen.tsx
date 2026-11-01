@@ -7,7 +7,7 @@ import { useDayEvents, useSettings, useSnapshot, useSyncState, useToday } from "
 import { timeLabel } from "@/lib/client/labels";
 import { dayEvents, logEvent, updateEvent } from "@/lib/client/log";
 import { usePendingDeletes } from "@/lib/client/pending-delete";
-import { refreshFromServer } from "@/lib/client/sync";
+import { refreshFromServer, retryFailed } from "@/lib/client/sync";
 import { useOpenVisit } from "@/lib/client/toilet-visit";
 import { mainMeals, ofKind, waterMl } from "@/lib/domain/day";
 import { mealAnalysisOf, payloadOf } from "@/lib/domain/events";
@@ -219,7 +219,12 @@ export function TodayScreen() {
           ) : null}
         </div>
         <div className="flex shrink-0 items-center gap-2 pb-1.5">
-          {!sync.online || sync.pending > 0 ? (
+          {sync.failed > 0 ? (
+            <button type="button" onClick={() => void retryFailed()} className="pressable flex h-8 items-center gap-1.5 rounded-full bg-care/15 px-3 text-xs font-semibold text-care shadow-card" role="status">
+              <CloudOffIcon className="size-4" />
+              {sync.failed} not saved, retry
+            </button>
+          ) : !sync.online || sync.pending > 0 ? (
             <span className="flex h-8 items-center gap-1.5 rounded-full bg-surface px-3 text-xs font-medium text-ink-2 shadow-card" role="status">
               <CloudOffIcon className="size-4" />
               {sync.online ? `${sync.pending} to sync` : "Offline"}

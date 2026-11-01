@@ -1,10 +1,10 @@
 import type { Ring } from "@/lib/domain/rings";
 
 const COLOR: Record<Ring["id"], string> = {
-  gut: "text-gut",
-  fuel: "text-fuel",
-  move: "text-move",
-  rest: "text-rest",
+  gut: "text-ring-gut",
+  fuel: "text-ring-fuel",
+  move: "text-ring-move",
+  rest: "text-ring-rest",
 };
 
 /**

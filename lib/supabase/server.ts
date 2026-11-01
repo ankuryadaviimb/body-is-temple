@@ -3,7 +3,7 @@ import { createServerClient } from "@supabase/ssr";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { cookies } from "next/headers";
 import { env, isAllowedEmail } from "@/lib/env";
-import { SESSION_COOKIE_OPTIONS } from "./cookie-options";
+import { SESSION_COOKIE_OPTIONS, sessionCookieOptions, sessionIsFresh } from "./cookie-options";
 
 /**
  * Supabase is only ever called from the server. The browser never sees a Supabase
@@ -21,7 +21,7 @@ export async function supabaseServer(): Promise<SupabaseClient> {
       setAll: (toSet) => {
         try {
           for (const { name, value, options } of toSet) {
-            store.set(name, value, { ...options, ...SESSION_COOKIE_OPTIONS });
+            store.set(name, value, sessionCookieOptions(options));
           }
         } catch {
           // Called from a Server Component, where cookies are read-only. The proxy
@@ -48,5 +48,7 @@ export async function requireUser(): Promise<AuthedContext> {
   if (error || !claims?.sub) throw new AuthError();
   const email = typeof claims.email === "string" ? claims.email : null;
   if (!isAllowedEmail(email)) throw new AuthError();
+  // Refresh tokens never expire on the free plan, so cap a session at 90 days from sign-in.
+  if (!sessionIsFresh(claims)) throw new AuthError();
   return { supabase, userId: claims.sub };
 }

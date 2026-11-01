@@ -6,7 +6,10 @@ export async function POST(req: Request) {
     assertWriteAllowed(req);
     const supabase = await supabaseServer();
     await supabase.auth.signOut();
-    return json({ ok: true });
+    const res = json({ ok: true });
+    // Drops cached private files (photos, PDFs) from this browser.
+    res.headers.set("clear-site-data", '"cache"');
+    return res;
   } catch (err) {
     return handleError(err, "sign-out");
   }

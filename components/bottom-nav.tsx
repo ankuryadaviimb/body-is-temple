@@ -27,8 +27,10 @@ export function BottomNav() {
         {TABS.map(({ href, label, Icon }) => {
           const active =
             href === "/"
-              ? path === "/"
-              : path.startsWith(href) || (href === "/coach" && (path.startsWith("/insights") || path.startsWith("/memory")));
+              ? path === "/" || path.startsWith("/nutrition")
+              : path.startsWith(href) ||
+                (href === "/coach" && ["/insights", "/memory", "/records"].some((p) => path.startsWith(p))) ||
+                (href === "/history" && path.startsWith("/report"));
           return (
             <li key={href}>
               <Link

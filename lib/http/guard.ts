@@ -30,6 +30,14 @@ export function assertWriteAllowed(req: Request): void {
   if (req.headers.get(CLIENT_HEADER) !== "1") throw new HttpError(403, "Forbidden");
 }
 
+/**
+ * For sensitive reads (the full data export): require the app's own header, which a
+ * plain link or another site cannot send, so the file is only fetched by the app itself.
+ */
+export function assertReadAllowed(req: Request): void {
+  if (req.headers.get(CLIENT_HEADER) !== "1") throw new HttpError(403, "Forbidden");
+}
+
 export async function readJson<T extends z.ZodType>(req: Request, schema: T, maxBytes = 64_000): Promise<z.infer<T>> {
   const type = req.headers.get("content-type") ?? "";
   if (!type.startsWith("application/json")) throw new HttpError(415, "Expected JSON");
@@ -80,4 +88,14 @@ export function rateLimit(key: string, limit: number, windowMs: number): void {
 
 export function clientIp(req: Request): string {
   return req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
+}
+
+/**
+ * Makes sign-in and sign-up take about the same time whatever the outcome, so response
+ * timing cannot reveal which emails are allowed.
+ */
+export async function steadyTiming(startedAt: number, minMs = 900): Promise<void> {
+  const target = minMs + Math.floor(Math.random() * 200);
+  const wait = target - (Date.now() - startedAt);
+  if (wait > 0) await new Promise((r) => setTimeout(r, wait));
 }

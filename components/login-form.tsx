@@ -8,7 +8,7 @@ import { ApiError, apiSend } from "@/lib/client/api";
  * Email and password sign-in inside the installed app. iPhone offers to save the
  * password to Keychain, so later sign-ins are one Face ID tap.
  */
-export function LoginForm() {
+export function LoginForm({ allowSignUp = false }: { allowSignUp?: boolean }) {
   const router = useRouter();
   const [mode, setMode] = useState<"sign-in" | "create">("sign-in");
   const [email, setEmail] = useState("");
@@ -69,16 +69,18 @@ export function LoginForm() {
         <button type="submit" disabled={busy} className="pressable mt-3 h-[52px] rounded-2xl bg-brand text-[17px] font-semibold text-brand-ink disabled:opacity-60">
           {busy ? "Please wait..." : mode === "create" ? "Create my account" : "Sign in"}
         </button>
-        <button
-          type="button"
-          onClick={() => {
-            setMode(mode === "create" ? "sign-in" : "create");
-            setMessage(null);
-          }}
-          className="h-11 text-[15px] font-medium text-brand"
-        >
-          {mode === "create" ? "I already have an account" : "First time here? Create your account"}
-        </button>
+        {allowSignUp ? (
+          <button
+            type="button"
+            onClick={() => {
+              setMode(mode === "create" ? "sign-in" : "create");
+              setMessage(null);
+            }}
+            className="h-11 text-[15px] font-medium text-brand"
+          >
+            {mode === "create" ? "I already have an account" : "First time here? Create your account"}
+          </button>
+        ) : null}
       </form>
       {message ? <p className="fade-in mt-4 rounded-2xl bg-surface px-4 py-3 text-sm leading-relaxed text-ink-2 shadow-card">{message}</p> : null}
     </div>

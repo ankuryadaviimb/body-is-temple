@@ -1,11 +1,13 @@
 "use client";
 
 import { useLiveQuery } from "dexie-react-hooks";
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import { apiGet } from "@/lib/client/api";
 import { db, type LocalEvent } from "@/lib/client/db";
 import { useSettings, useToday } from "@/lib/client/hooks";
 import { usePendingDeletes } from "@/lib/client/pending-delete";
+import { mergeServerRange } from "@/lib/client/sync";
 import { isabgolGapAfterDinner, mainMeals, ofKind, summarizeToilet } from "@/lib/domain/day";
 import { payloadOf, type StoredEvent } from "@/lib/domain/events";
 import { BRISTOL_LABELS, formatGap } from "@/lib/domain/ladder";
@@ -41,12 +43,11 @@ export function HistoryScreen() {
   useEffect(() => {
     if (!today) return;
     const from = addDays(today, -(DAYS - 1));
+    const requestedAt = Date.now();
     apiGet<{ events: StoredEvent[] }>(`/api/events?from=${from}&to=${today}`)
-      .then(async ({ events }) => {
-        const local = await db().events.where("logical_day").between(from, today, true, true).toArray();
-        const pendingIds = new Set(local.filter((e) => e.sync !== "synced").map((e) => e.id));
-        await db().events.bulkPut(events.filter((e) => !pendingIds.has(e.id)).map((e) => ({ ...e, sync: "synced" as const })));
-      })
+      // Same safe merge as Today: removes entries the server no longer has, never
+      // overwrites local changes still waiting, never brings back a deleted entry.
+      .then(({ events }) => mergeServerRange(from, today, events, requestedAt))
       .catch(() => undefined)
       .finally(() => setLoading(false));
   }, [today]);
@@ -83,7 +84,12 @@ export function HistoryScreen() {
     <main className="fade-in flex flex-col gap-6 pt-2">
       <header>
         <p className="text-[13px] font-semibold uppercase tracking-wide text-ink-3">Last 2 weeks{loading ? " · updating" : ""}</p>
-        <h1 className="mt-1 text-[32px] font-bold leading-tight tracking-tight">History</h1>
+        <div className="mt-1 flex items-center justify-between gap-3">
+          <h1 className="text-[32px] font-bold leading-tight tracking-tight">History</h1>
+          <Link href="/report" className="pressable inline-flex h-9 items-center rounded-full bg-brand/15 px-3.5 text-[14px] font-semibold text-brand">
+            Gut diary
+          </Link>
+        </div>
       </header>
 
       <section className="flex gap-3" aria-label="Summary">

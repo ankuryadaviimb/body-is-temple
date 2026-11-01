@@ -9,20 +9,25 @@ import type { ClientEventInput, StoredEvent } from "@/lib/domain/events";
  * No auth tokens are stored here (the session lives in HttpOnly cookies).
  */
 
-export type LocalEvent = StoredEvent & { sync: "pending" | "synced" | "error" };
+/** synced_at: when the server last confirmed this copy (a reply older than that never overwrites it). */
+export type LocalEvent = StoredEvent & { sync: "pending" | "synced" | "error"; synced_at?: number };
+
+/**
+ * sent: the request is going out (or went out) on this attempt.
+ * everSent: it went out at least once, so the server may have it. Never reset: such an op
+ * is frozen, edits become their own patch and deletes always reach the server.
+ * failed: the server rejected it; it is kept (paused) until the person retries.
+ */
+type OpBase = { id?: number; eventId: string; tries: number; createdAt: number; sent?: boolean; everSent?: boolean; failed?: boolean; lastError?: string };
+
+/** Older ops (before everSent existed) only know "sent". */
+export const mayBeOnServer = (op: { sent?: boolean; everSent?: boolean }) => Boolean(op.everSent ?? op.sent);
 
 export type OutboxOp =
-  | { id?: number; type: "create"; eventId: string; input: ClientEventInput; tries: number; createdAt: number }
-  | {
-      id?: number;
-      type: "patch";
-      eventId: string;
-      patch: { occurred_at?: string; payload?: Record<string, unknown> };
-      tries: number;
-      createdAt: number;
-    }
-  | { id?: number; type: "delete"; eventId: string; tries: number; createdAt: number }
-  | { id?: number; type: "photo"; eventId: string; input: ClientEventInput; blob: Blob; tries: number; createdAt: number };
+  | (OpBase & { type: "create"; input: ClientEventInput })
+  | (OpBase & { type: "patch"; patch: { occurred_at?: string; payload?: Record<string, unknown> } })
+  | (OpBase & { type: "delete" })
+  | (OpBase & { type: "photo"; input: ClientEventInput; blob: Blob });
 
 export type KvRow = { key: string; value: unknown };
 

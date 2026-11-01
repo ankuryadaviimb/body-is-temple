@@ -87,7 +87,7 @@ export function eventDetail(e: StoredEvent): string | null {
     }
     const status = e.meta?.ai_status;
     if (status === "pending") return typeof p.text === "string" ? `"${p.text}" (reading it...)` : "Reading the photo...";
-    if (status === "failed") return typeof p.text === "string" ? `"${p.text}"` : "Could not read the photo. Tap to describe it.";
+    if (status === "failed") return typeof p.text === "string" ? `"${p.text}" (not read yet, tap to retry)` : "Could not read the photo. Tap to retry or describe it.";
     return typeof p.text === "string" ? `"${p.text}"` : null;
   }
   if (e.kind === "toilet") {

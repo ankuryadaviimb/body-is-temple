@@ -2,7 +2,7 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { env, isAllowedEmail } from "@/lib/env";
 import { buildCsp, newNonce } from "@/lib/http/csp";
-import { SESSION_COOKIE_OPTIONS } from "@/lib/supabase/cookie-options";
+import { SESSION_COOKIE_OPTIONS, sessionCookieOptions, sessionIsFresh } from "@/lib/supabase/cookie-options";
 
 /**
  * Runs before every page request:
@@ -42,7 +42,7 @@ export async function proxy(request: NextRequest) {
         requestHeaders.set("cookie", request.cookies.toString());
         response = NextResponse.next({ request: { headers: requestHeaders } });
         for (const { name, value, options } of toSet) {
-          response.cookies.set(name, value, { ...options, ...SESSION_COOKIE_OPTIONS });
+          response.cookies.set(name, value, sessionCookieOptions(options));
         }
       },
     },
@@ -50,20 +50,36 @@ export async function proxy(request: NextRequest) {
 
   const { data } = await supabase.auth.getClaims();
   const claims = data?.claims;
-  const signedIn = Boolean(claims?.sub) && isAllowedEmail(typeof claims?.email === "string" ? claims.email : null);
+  const hasSession = Boolean(claims?.sub);
+  // The same rules as every server check (allowed email, 90-day cap), so the proxy never
+  // sends someone back into the app that the app itself would refuse.
+  const signedIn = hasSession && isAllowedEmail(typeof claims?.email === "string" ? claims.email : null) && sessionIsFresh(claims);
   const path = request.nextUrl.pathname;
+
+  if (hasSession && !signedIn) {
+    // An expired or refused session: end it and clear its cookies, so /login can load.
+    await supabase.auth.signOut({ scope: "local" }).catch(() => undefined);
+    for (const c of request.cookies.getAll()) {
+      if (c.name.startsWith("sb-")) response.cookies.set(c.name, "", { ...SESSION_COOKIE_OPTIONS, maxAge: 0 });
+    }
+  }
 
   if (!signedIn && !PUBLIC_PATHS.has(path)) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     url.search = "";
-    return withSecurityHeaders(NextResponse.redirect(url));
+    const redirect = NextResponse.redirect(url);
+    for (const c of response.cookies.getAll()) redirect.cookies.set(c);
+    return withSecurityHeaders(redirect);
   }
   if (signedIn && path === "/login") {
     const url = request.nextUrl.clone();
     url.pathname = "/";
     url.search = "";
-    return withSecurityHeaders(NextResponse.redirect(url));
+    // Carry any refreshed session cookies, or the next request would refresh again.
+    const redirect = NextResponse.redirect(url);
+    for (const c of response.cookies.getAll()) redirect.cookies.set(c);
+    return withSecurityHeaders(redirect);
   }
 
   return withSecurityHeaders(response);

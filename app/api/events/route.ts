@@ -1,10 +1,10 @@
 import { after } from "next/server";
 import { z } from "zod";
 import { analyzeMealEvent } from "@/lib/ai/meal";
-import { EventBatch } from "@/lib/domain/events";
-import { assertWriteAllowed, handleError, HttpError, json, readJson } from "@/lib/http/guard";
+import { EventBatch, type StoredEvent } from "@/lib/domain/events";
+import { assertWriteAllowed, handleError, HttpError, json, rateLimit, readJson } from "@/lib/http/guard";
 import { ensureCoachCard } from "@/lib/server/coach-card";
-import { insertEvents, listEvents } from "@/lib/server/events";
+import { insertEvents, listEvents, mergeMeta } from "@/lib/server/events";
 import { loadSettings } from "@/lib/server/settings";
 import { requireUser } from "@/lib/supabase/server";
 import { addDays, daysBetween } from "@/lib/domain/time";
@@ -33,14 +33,25 @@ export async function POST(req: Request) {
   try {
     assertWriteAllowed(req);
     const ctx = await requireUser();
+    rateLimit(`events:${ctx.userId}`, 600, 60 * 60_000);
     const { events } = await readJson(req, EventBatch, 200_000);
     const settings = await loadSettings(ctx);
-    const stored = await insertEvents(ctx, events, "app", settings);
+    let stored = await insertEvents(ctx, events, "app", settings);
 
     // Text-described meals get analyzed in the background; logging never waits.
-    const textMeals = stored.filter(
-      (e) => e.kind === "meal" && e.meta?.ai_status === "pending" && typeof e.payload.text === "string",
-    );
+    // At most 10 reads per batch, so a large offline backlog cannot use up the day's AI.
+    // The rest are marked as not read, so the app offers "Read this meal again" for them.
+    const pendingText = stored.filter((e) => e.kind === "meal" && e.meta?.ai_status === "pending" && typeof e.payload.text === "string");
+    const textMeals = pendingText.slice(0, 10);
+    const deferred = pendingText.slice(10);
+    if (deferred.length > 0) {
+      const marked = new Map<string, StoredEvent>();
+      for (const meal of deferred) {
+        const updated = await mergeMeta(ctx, meal.id, { ai_status: "failed", ai_reason: "too_many_at_once" });
+        if (updated) marked.set(updated.id, updated);
+      }
+      stored = stored.map((e) => marked.get(e.id) ?? e);
+    }
     if (textMeals.length > 0) {
       after(async () => {
         for (const meal of textMeals) await analyzeMealEvent(ctx, meal, settings);

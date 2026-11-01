@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 import { logEvent } from "@/lib/client/log";
 import { Choice, Sheet } from "../sheet";
@@ -75,6 +76,9 @@ export function MoreSheet({ open, onClose, onEarlier }: { open: boolean; onClose
               Add an earlier entry (meal, toilet, water, tea...)
             </button>
           ) : null}
+          <Link href="/records" onClick={close} className="col-span-2 flex h-14 items-center justify-center rounded-2xl bg-surface-2 font-medium">
+            Upload a report (blood test, consultation)
+          </Link>
           {(
             [
               ["meal_text", "Meal by text"],

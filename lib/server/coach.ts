@@ -6,6 +6,7 @@ import { mergeAnswers, normalizeCoachAnswer, refineAnswer, type CoachAnswer } fr
 import { classifyIntent, COACH_INTENTS, type CoachIntent } from "@/lib/domain/coach/intents";
 import { parseStoredAnswer, type CoachAsk, type CoachMessage } from "@/lib/domain/coach/message";
 import { quickTake } from "@/lib/domain/coach/quick";
+import { labRedFlags } from "@/lib/domain/records";
 import { addDays } from "@/lib/domain/time";
 import type { AuthedContext } from "@/lib/supabase/server";
 import { askPrompt, type EarlierQuestion } from "@/lib/coach/context";
@@ -78,7 +79,7 @@ export async function askCoach(ctx: AuthedContext, ask: CoachAsk): Promise<Coach
   const intent = ask.intent ?? classifyIntent(ask.question);
   const [data, recent] = await Promise.all([loadCoachData(ctx, settings, today), listMessages(ctx, 4)]);
   const now = new Date();
-  const quick = quickTake({
+  let quick = quickTake({
     intent,
     question: ask.question,
     now,
@@ -87,6 +88,13 @@ export async function askCoach(ctx: AuthedContext, ask: CoachAsk): Promise<Coach
     yesterday: data.byDay.get(addDays(today, -1)) ?? [],
     tolerance: data.tolerance,
   });
+  // Anemia signs on a recent blood test are a doctor matter, whatever the question.
+  const labFlags = labRedFlags(data.labs ?? []);
+  if (labFlags.length > 0) {
+    const note = `Your recent blood test shows ${labFlags.join(" and ")}. Please discuss it with your doctor soon.`;
+    if (quick) quick.doctor = quick.doctor ?? note;
+    else quick = { headline: "Please check this with a doctor", why: [], now: [], watch: [], good: [], doctor: note, actions: [], remember: [], confidence: "high" };
+  }
   const earlier: EarlierQuestion[] = recent
     .filter((m) => now.getTime() - new Date(m.created_at).getTime() < 48 * 3_600_000)
     .slice(0, 2)

@@ -3,14 +3,15 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { apiSend } from "@/lib/client/api";
+import { ApiError, apiSend } from "@/lib/client/api";
 import { clearDevice } from "@/lib/client/db";
-import { useSettings } from "@/lib/client/hooks";
-import { refreshFromServer } from "@/lib/client/sync";
-import type { Settings } from "@/lib/domain/settings";
+import { useSettings, useSyncState } from "@/lib/client/hooks";
+import { downloadExport } from "@/lib/client/export";
+import { refreshFromServer, retryFailed, stopSync, syncNow, unsyncedCount } from "@/lib/client/sync";
+import { SettingsUpdate, type Settings } from "@/lib/domain/settings";
 import { autoProtein, calorieTarget, PROTEIN_PER_KG } from "@/lib/domain/nutrition";
 import { zoneLabel } from "@/lib/domain/time";
-import { BookIcon, ChartIcon, ChevronRightIcon, PlusIcon, TrashIcon } from "../icons";
+import { BookIcon, ChartIcon, ChevronRightIcon, NoteIcon, PlusIcon, TrashIcon } from "../icons";
 import { useToast } from "../toast";
 import { TimeZoneSheet } from "./time-zone-sheet";
 
@@ -38,36 +39,63 @@ function SettingsForm({ initial }: { initial: Settings }) {
   const [form, setForm] = useState<Settings>(initial);
   const [saving, setSaving] = useState(false);
   const [tzOpen, setTzOpen] = useState(false);
+  const [confirmSignOut, setConfirmSignOut] = useState<number | null>(null);
+  const [exporting, setExporting] = useState(false);
 
   const set = <K extends keyof Settings>(key: K, value: Settings[K]) => setForm((f) => ({ ...f, [key]: value }));
 
+  const { ladder_index: _i, ladder_since: _s, ...editable } = form;
+  void _i;
+  void _s;
+  // Same rules as the server, so a bad value is caught here, next to its field.
+  const check = SettingsUpdate.safeParse(editable);
+  const errors: Partial<Record<keyof Settings, string>> = {};
+  if (!check.success) {
+    for (const issue of check.error.issues) {
+      const key = String(issue.path[0]) as keyof Settings;
+      if (!errors[key]) errors[key] = FIELD_HELP[key] ?? "Check this value.";
+    }
+  }
+  const invalid = Object.keys(errors).length > 0;
+
   async function save() {
+    if (invalid) return;
     setSaving(true);
     try {
-      const { ladder_index: _i, ladder_since: _s, ...editable } = form;
-      void _i;
-      void _s;
       await apiSend("PUT", "/api/settings", editable);
       await refreshFromServer();
       show("Settings saved.", "good");
-    } catch {
-      show("Could not save. Check your connection and try again.", "tip");
+    } catch (err) {
+      show(err instanceof ApiError && err.status === 400 ? "Some values are out of range. Check the highlighted fields." : "Could not save. Check your connection and try again.", "tip");
     } finally {
       setSaving(false);
     }
   }
 
   async function signOut() {
+    // Signing out clears this phone, so anything not yet synced must reach the server first.
+    await syncNow().catch(() => undefined);
+    const unsynced = await unsyncedCount();
+    if (unsynced > 0 && !confirmSignOut) {
+      setConfirmSignOut(unsynced);
+      return;
+    }
     try {
       await apiSend("POST", "/api/auth/sign-out");
-    } finally {
-      await clearDevice();
-      router.replace("/login");
-      router.refresh();
+    } catch {
+      // Without the server's OK the session cookie may still be valid, so keep everything.
+      show("Could not sign out. Check your connection and try again.", "tip");
+      return;
     }
+    stopSync();
+    await clearDevice();
+    if ("caches" in window) {
+      for (const key of await caches.keys()) await caches.delete(key);
+    }
+    router.replace("/login");
+    router.refresh();
   }
 
-  const num = (v: string) => (v === "" ? null : Number(v));
   const auto = autoProtein(form.weight_kg, form.height_cm);
   const kcal = calorieTarget(form);
   const bodyNote = [
@@ -77,7 +105,6 @@ function SettingsForm({ initial }: { initial: Settings }) {
     kcal ? `Calories for steady fat loss: about ${kcal.low.toLocaleString("en-IN")} to ${kcal.high.toLocaleString("en-IN")} a day.` : "Birth year and sex are optional; they add a calorie target.",
   ].join(" ");
   const dirty = JSON.stringify(form) !== JSON.stringify(initial);
-  const field = "tabular w-28 bg-transparent text-right text-[17px] text-ink outline-none placeholder:text-ink-3";
 
   return (
     <main className="fade-in flex flex-col gap-7 pt-2">
@@ -86,15 +113,15 @@ function SettingsForm({ initial }: { initial: Settings }) {
         <h1 className="mt-1 text-[32px] font-bold leading-tight tracking-tight">Settings</h1>
       </header>
 
-      <Group title="Body" note={bodyNote}>
+      <Group title="Body" note={bodyNote} errors={pick(errors, ["weight_kg", "height_cm", "birth_year", "protein_target_g"])}>
         <Row label="Weight" unit="kg">
-          <input inputMode="decimal" placeholder="Add" className={field} value={form.weight_kg ?? ""} onChange={(e) => set("weight_kg", num(e.target.value))} />
+          <NumberField decimals placeholder="Add" invalid={!!errors.weight_kg} value={form.weight_kg} onChange={(v) => set("weight_kg", v)} />
         </Row>
         <Row label="Height" unit="cm">
-          <input inputMode="decimal" placeholder="Add" className={field} value={form.height_cm ?? ""} onChange={(e) => set("height_cm", num(e.target.value))} />
+          <NumberField decimals placeholder="Add" invalid={!!errors.height_cm} value={form.height_cm} onChange={(v) => set("height_cm", v)} />
         </Row>
         <Row label="Birth year">
-          <input inputMode="numeric" placeholder="Optional" className={field} value={form.birth_year ?? ""} onChange={(e) => set("birth_year", num(e.target.value))} />
+          <NumberField placeholder="Optional" invalid={!!errors.birth_year} value={form.birth_year} onChange={(v) => set("birth_year", v)} />
         </Row>
         <div className="flex min-h-[52px] items-center gap-3 px-4">
           <span className="flex-1 text-[17px]">Sex</span>
@@ -129,23 +156,23 @@ function SettingsForm({ initial }: { initial: Settings }) {
           </div>
         ) : (
           <Row label="Custom target" unit="g a day">
-            <input inputMode="numeric" className={field} value={form.protein_target_g ?? ""} onChange={(e) => set("protein_target_g", num(e.target.value))} />
+            <NumberField invalid={!!errors.protein_target_g} value={form.protein_target_g} onChange={(v) => set("protein_target_g", v)} />
           </Row>
         )}
       </Group>
 
-      <Group title="Daily targets">
+      <Group title="Daily targets" errors={pick(errors, ["water_target_ml", "water_glass_ml", "chia_tbsp", "tea_ml", "isabgol_delay_min", "bedtime_target_min", "tz"])}>
         <Row label="Water" unit="ml">
-          <input inputMode="numeric" className={field} value={form.water_target_ml} onChange={(e) => set("water_target_ml", Number(e.target.value) || 0)} />
+          <NumberField invalid={!!errors.water_target_ml} value={form.water_target_ml} onChange={(v) => set("water_target_ml", v ?? NaN)} />
         </Row>
         <Row label="Usual glass" unit="ml">
-          <input inputMode="numeric" className={field} value={form.water_glass_ml} onChange={(e) => set("water_glass_ml", Number(e.target.value) || 0)} />
+          <NumberField invalid={!!errors.water_glass_ml} value={form.water_glass_ml} onChange={(v) => set("water_glass_ml", v ?? NaN)} />
         </Row>
         <Row label="Chia per glass" unit="tbsp">
-          <input inputMode="decimal" className={field} value={form.chia_tbsp} onChange={(e) => set("chia_tbsp", Number(e.target.value) || 0)} />
+          <NumberField decimals invalid={!!errors.chia_tbsp} value={form.chia_tbsp} onChange={(v) => set("chia_tbsp", v ?? NaN)} />
         </Row>
         <Row label="Usual tea" unit="ml a cup">
-          <input inputMode="numeric" className={field} value={form.tea_ml} onChange={(e) => set("tea_ml", Number(e.target.value) || 0)} />
+          <NumberField invalid={!!errors.tea_ml} value={form.tea_ml} onChange={(v) => set("tea_ml", v ?? NaN)} />
         </Row>
         <Row label="Bedtime target">
           <input
@@ -159,7 +186,7 @@ function SettingsForm({ initial }: { initial: Settings }) {
           />
         </Row>
         <Row label="Isabgol delay" unit="min later">
-          <input inputMode="numeric" className={field} value={form.isabgol_delay_min} onChange={(e) => set("isabgol_delay_min", Number(e.target.value) || 0)} />
+          <NumberField invalid={!!errors.isabgol_delay_min} value={form.isabgol_delay_min} onChange={(v) => set("isabgol_delay_min", v ?? NaN)} />
         </Row>
         <button type="button" onClick={() => setTzOpen(true)} className="flex min-h-[52px] w-full items-center gap-3 px-4 py-2 text-left">
           <span className="flex-1 text-[17px]">Time zone</span>
@@ -227,11 +254,11 @@ function SettingsForm({ initial }: { initial: Settings }) {
       {dirty ? (
         <div className="fade-in fixed inset-x-0 bottom-[calc(env(safe-area-inset-bottom)+4.75rem)] z-30 px-4">
           <div className="mx-auto flex max-w-md items-center gap-3 rounded-2xl border border-line bg-surface-2/95 p-2 pl-4 shadow-card backdrop-blur-xl">
-            <span className="flex-1 text-[15px] font-medium">Unsaved changes</span>
+            <span className={`flex-1 text-[15px] font-medium ${invalid ? "text-care" : ""}`}>{invalid ? "Fix the highlighted values" : "Unsaved changes"}</span>
             <button type="button" onClick={() => setForm(initial)} className="pressable h-10 rounded-xl px-3 text-[15px] font-semibold text-ink-2">
               Discard
             </button>
-            <button type="button" disabled={saving} onClick={() => void save()} className="pressable h-10 rounded-xl bg-brand px-4 text-[15px] font-semibold text-brand-ink disabled:opacity-60">
+            <button type="button" disabled={saving || invalid} onClick={() => void save()} className="pressable h-10 rounded-xl bg-brand px-4 text-[15px] font-semibold text-brand-ink disabled:opacity-50">
               {saving ? "Saving..." : "Save"}
             </button>
           </div>
@@ -243,10 +270,52 @@ function SettingsForm({ initial }: { initial: Settings }) {
         <NavRow href="/insights" Icon={ChartIcon} label="Your patterns" />
       </Group>
 
-      <Group title="Privacy" note="Photos are shrunk on the phone before upload, which removes location and device details. The AI providers used do not train on your data.">
-        <button type="button" onClick={() => void signOut()} className="pressable flex h-12 w-full items-center px-4 text-[17px] font-medium text-care">
-          Sign out and clear this phone
+      <Group title="Your data" note="Every entry saves on this phone first and in your own database within seconds. The free database plan keeps no backups, so export a copy now and then.">
+        <SyncRow />
+        <button
+          type="button"
+          disabled={exporting}
+          onClick={async () => {
+            setExporting(true);
+            try {
+              const how = await downloadExport();
+              show(how === "shared" ? "Export ready." : "Export saved to your downloads.", "good");
+            } catch {
+              show("Could not export. Check your connection and try again.", "tip");
+            } finally {
+              setExporting(false);
+            }
+          }}
+          className="pressable flex min-h-[52px] w-full items-center gap-3 px-4 text-left disabled:opacity-60"
+        >
+          <BookIcon className="size-5 shrink-0 text-brand" />
+          <span className="flex-1 text-[17px]">{exporting ? "Preparing export..." : "Export all my data"}</span>
+          <ChevronRightIcon className="size-4 shrink-0 text-ink-3" />
         </button>
+        <NavRow href="/records" Icon={NoteIcon} label="Health records (reports, visits)" />
+        <NavRow href="/report" Icon={NoteIcon} label="Gut diary for your doctor" />
+      </Group>
+
+      <Group title="Privacy" note="Photos are shrunk on the phone before upload, which removes location and device details. The AI providers used do not train on your data.">
+        {confirmSignOut ? (
+          <div className="px-4 py-3">
+            <p className="text-[15px] leading-relaxed">
+              {confirmSignOut} {confirmSignOut === 1 ? "entry has" : "entries have"} not reached the server yet (no connection). Signing out now deletes {confirmSignOut === 1 ? "it" : "them"} from this phone.
+            </p>
+            <div className="mt-3 flex gap-2">
+              <button type="button" onClick={() => setConfirmSignOut(null)} className="pressable h-11 flex-1 rounded-xl bg-surface-2 text-[15px] font-semibold">
+                Keep them
+              </button>
+              <button type="button" onClick={() => void signOut()} className="pressable h-11 flex-1 rounded-xl bg-care/15 text-[15px] font-semibold text-care">
+                Sign out anyway
+              </button>
+            </div>
+          </div>
+        ) : (
+          <button type="button" onClick={() => void signOut()} className="pressable flex h-12 w-full items-center px-4 text-[17px] font-medium text-care">
+            Sign out and clear this phone
+          </button>
+        )}
       </Group>
       {tzOpen ? (
         <TimeZoneSheet
@@ -259,6 +328,31 @@ function SettingsForm({ initial }: { initial: Settings }) {
         />
       ) : null}
     </main>
+  );
+}
+
+function SyncRow() {
+  const sync = useSyncState();
+  const when = sync.lastSyncedAt ? new Date(sync.lastSyncedAt).toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit" }) : null;
+  const text = sync.failed > 0
+    ? `${sync.failed} ${sync.failed === 1 ? "change was" : "changes were"} not accepted by the server. They are safe on this phone.`
+    : !sync.online
+      ? "Offline. Entries wait safely on this phone."
+      : sync.pending > 0
+        ? `${sync.pending} waiting to sync`
+        : when
+          ? `All saved. Last synced at ${when}.`
+          : "All saved.";
+  return (
+    <div className="flex min-h-[52px] items-center gap-3 px-4 py-2">
+      <span className={`size-2.5 shrink-0 rounded-full ${sync.failed > 0 ? "bg-care" : !sync.online || sync.pending > 0 ? "bg-tip" : "bg-good"}`} aria-hidden />
+      <span className="flex-1 text-[15px] leading-snug text-ink-2">{text}</span>
+      {sync.failed > 0 ? (
+        <button type="button" onClick={() => void retryFailed()} className="pressable h-9 shrink-0 rounded-xl bg-surface-2 px-3 text-[14px] font-semibold text-brand">
+          Retry
+        </button>
+      ) : null}
+    </div>
   );
 }
 
@@ -290,13 +384,84 @@ function Segmented({ value, options, onChange }: { value: string; options: { val
   );
 }
 
-function Group({ title, note, children }: { title: string; note?: string; children: React.ReactNode }) {
+function Group({ title, note, errors = [], children }: { title: string; note?: string; errors?: string[]; children: React.ReactNode }) {
   return (
     <section>
       <h2 className="mb-2 px-4 text-[13px] font-semibold uppercase tracking-wide text-ink-3">{title}</h2>
       <div className="divide-y divide-line overflow-hidden rounded-[22px] bg-surface shadow-card">{children}</div>
+      {errors.length > 0 ? (
+        <ul className="mt-2 px-4 text-[13px] leading-relaxed text-care" role="alert">
+          {errors.map((e) => (
+            <li key={e}>{e}</li>
+          ))}
+        </ul>
+      ) : null}
       {note ? <p className="mt-2 px-4 text-xs leading-relaxed text-ink-3">{note}</p> : null}
     </section>
+  );
+}
+
+const FIELD_HELP: Partial<Record<keyof Settings, string>> = {
+  weight_kg: "Weight: 25 to 300 kg.",
+  height_cm: "Height: 100 to 250 cm.",
+  birth_year: "Birth year: 1920 to 2015, or leave it empty.",
+  protein_target_g: "Protein target: a whole number from 20 to 300 g.",
+  water_target_ml: "Water target: a whole number from 500 to 6,000 ml.",
+  water_glass_ml: "Usual glass: a whole number from 100 to 1,000 ml.",
+  chia_tbsp: "Chia: 0.5 to 4 tablespoons.",
+  tea_ml: "Usual tea: a whole number from 50 to 600 ml.",
+  isabgol_delay_min: "Isabgol delay: a whole number from 30 to 240 minutes.",
+  bedtime_target_min: "Bedtime target: between 8 PM and 4 AM.",
+  tz: "Pick a time zone from the list.",
+};
+
+function pick(errors: Partial<Record<keyof Settings, string>>, keys: (keyof Settings)[]): string[] {
+  return keys.map((k) => errors[k]).filter((e): e is string => typeof e === "string");
+}
+
+const parseNumber = (text: string): number | null => (text === "" || text === "." ? null : Number(text));
+
+/**
+ * A number input that keeps exactly what you type, so "72." can become "72.5", and
+ * passes the parsed number up. Letters are ignored. Resets when the saved value changes.
+ */
+function NumberField({
+  value,
+  onChange,
+  decimals = false,
+  placeholder,
+  invalid = false,
+}: {
+  value: number | null;
+  onChange: (v: number | null) => void;
+  decimals?: boolean;
+  placeholder?: string;
+  invalid?: boolean;
+}) {
+  const shown = (v: number | null) => (v === null || Number.isNaN(v) ? "" : String(v));
+  const [text, setText] = useState(shown(value));
+  const [last, setLast] = useState<number | null>(value);
+  const same = (a: number | null, b: number | null) => a === b || (a !== null && b !== null && Number.isNaN(a) && Number.isNaN(b));
+  if (!same(value, last)) {
+    setLast(value);
+    if (!same(parseNumber(text), value)) setText(shown(value));
+  }
+  return (
+    <input
+      inputMode={decimals ? "decimal" : "numeric"}
+      placeholder={placeholder}
+      value={text}
+      aria-invalid={invalid}
+      onChange={(e) => {
+        const t = e.target.value.replace(",", ".").trim();
+        if (!(decimals ? /^\d*\.?\d*$/ : /^\d*$/).test(t)) return;
+        const n = parseNumber(t);
+        setText(t);
+        setLast(n);
+        onChange(n);
+      }}
+      className={`tabular w-28 bg-transparent text-right text-[17px] outline-none placeholder:text-ink-3 ${invalid ? "text-care" : "text-ink"}`}
+    />
   );
 }
 

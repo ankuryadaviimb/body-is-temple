@@ -39,7 +39,7 @@ export function useDayEvents(day: string | undefined): LocalEvent[] | undefined 
 }
 
 export function useSyncState(): SyncState {
-  const [state, setState] = useState<SyncState>({ pending: 0, lastError: null, online: true });
+  const [state, setState] = useState<SyncState>({ pending: 0, failed: 0, lastError: null, online: true, lastSyncedAt: null });
   useEffect(() => onSyncState(setState), []);
   return state;
 }

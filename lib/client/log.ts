@@ -8,9 +8,10 @@ import { feedbackFor, type Feedback } from "@/lib/domain/rules-feedback";
 import { withDefaults, type Settings } from "@/lib/domain/settings";
 import type { CachedSnapshot } from "@/lib/domain/snapshot";
 import { addDays, localParts } from "@/lib/domain/time";
-import { db, kvGet, type LocalEvent } from "./db";
+import { apiSend } from "./api";
+import { db, kvGet, mayBeOnServer, type LocalEvent, type OutboxOp } from "./db";
 import { deviceSettings } from "./device";
-import { pollForAnalysis, syncNow } from "./sync";
+import { addTombstone, pollForAnalysis, syncNow } from "./sync";
 
 export async function currentSettings(): Promise<Settings> {
   const cached = (await kvGet<CachedSnapshot>("snapshot"))?.settings;
@@ -107,6 +108,11 @@ export async function logEvent<K extends EventKind>(
     }
   });
 
+  if (kind === "wake" || kind === "sleep") {
+    const date = morningOf(occurred_at, settings.tz);
+    if (date) await replaceMorning(date, settings);
+  }
+
   void syncNow().then(() => {
     if (kind === "meal" && meta.ai_status === "pending") pollForAnalysis();
   });
@@ -115,7 +121,34 @@ export async function logEvent<K extends EventKind>(
   return { event: local, feedback };
 }
 
-/** Edits time or payload. If the create has not synced yet, the edit is folded into it. */
+/**
+ * Wake and sleep times decide which day nearby entries belong to. After one changes,
+ * the entries of that calendar morning are placed again (the server does the same).
+ */
+async function replaceMorning(date: string, settings: Settings): Promise<void> {
+  const rows = await db()
+    .events.filter((e) => {
+      const p = localParts(e.occurred_at, settings.tz);
+      return p.date === date && p.minutes < 12 * 60;
+    })
+    .toArray();
+  for (const e of rows) {
+    const day = logicalDayFor(e.occurred_at, await localAnchors(e.occurred_at, settings.tz), settings.tz, settings.day_start_hour);
+    if (day !== e.logical_day) await db().events.update(e.id, { logical_day: day });
+  }
+}
+
+function morningOf(iso: string, tz: string): string | null {
+  const p = localParts(iso, tz);
+  return p.minutes < 12 * 60 ? p.date : null;
+}
+
+/**
+ * Edits time or payload. While the create has not been sent, the edit is folded into it;
+ * once it may have reached the server, the edit becomes its own patch, so it can never be
+ * lost to the create's reply. A rejected create is fixed by folding the edit into it and
+ * sending it again.
+ */
 export async function updateEvent(
   id: string,
   patch: { occurred_at?: string; payload?: Record<string, unknown> },
@@ -125,45 +158,116 @@ export async function updateEvent(
   if (!current) return;
   const occurred_at = patch.occurred_at ?? current.occurred_at;
   const payload = patch.payload ? { ...current.payload, ...patch.payload } : current.payload;
-  const logical_day = await logicalDayOf(occurred_at, settings);
-  const reanalyze = current.kind === "meal" && typeof patch.payload?.text === "string" && patch.payload.text.length > 0;
-  const meta = reanalyze ? { ...current.meta, ai_status: "pending" } : current.meta;
+  const anchorKind = current.kind === "wake" || current.kind === "sleep";
+  // Like the server: the entry's own old time is not an anchor; its new time is.
+  const anchors = (await localAnchors(occurred_at, settings.tz)).filter((a) => !(anchorKind && a.at === current.occurred_at));
+  if (anchorKind) anchors.push({ kind: current.kind as Anchor["kind"], at: occurred_at });
+  const logical_day = logicalDayFor(occurred_at, anchors, settings.tz, settings.day_start_hour);
+  const textChanged = current.kind === "meal" && typeof patch.payload?.text === "string" && patch.payload.text.length > 0 && patch.payload.text !== current.payload.text;
+  const meta = textChanged ? { ...current.meta, ai_status: "pending" } : current.meta;
 
   await db().transaction("rw", db().events, db().outbox, async () => {
-    await db().events.put({
-      ...current,
-      occurred_at,
-      payload,
-      meta,
-      logical_day,
-      sync: "pending",
-      updated_at: new Date().toISOString(),
-    });
-    const pendingCreate = await db()
-      .outbox.where("eventId")
-      .equals(id)
-      .filter((o) => o.type === "create" || o.type === "photo")
-      .first();
-    if (pendingCreate && (pendingCreate.type === "create" || pendingCreate.type === "photo")) {
-      const input = ClientEventInput.parse({ ...pendingCreate.input, occurred_at, payload });
-      await db().outbox.put({ ...pendingCreate, input });
+    await db().events.put({ ...current, occurred_at, payload, meta, logical_day, sync: "pending", updated_at: new Date().toISOString() });
+    const ops = await db().outbox.where("eventId").equals(id).toArray();
+    const create = ops.find((o) => o.type === "create" || o.type === "photo");
+    const send: { occurred_at?: string; payload?: Record<string, unknown> } = {};
+    if (patch.occurred_at && patch.occurred_at !== current.occurred_at) send.occurred_at = patch.occurred_at;
+    if (patch.payload) {
+      const changed = Object.fromEntries(Object.entries(patch.payload).filter(([k, v]) => JSON.stringify(current.payload[k]) !== JSON.stringify(v)));
+      if (Object.keys(changed).length) send.payload = changed;
+    }
+    const queuePatch = async () => {
+      if (!send.occurred_at && !send.payload) {
+        if (current.sync !== "pending") await db().events.update(id, { sync: current.sync });
+        return;
+      }
+      // Patches after the last one that may be in flight have not gone out (or were
+      // rejected): fold them and this edit into one, so a fix to a rejected edit replaces
+      // it instead of queuing behind it.
+      const patches = ops.filter((o): o is Extract<OutboxOp, { type: "patch" }> => o.type === "patch").sort((a, b) => a.id! - b.id!);
+      const lastInFlight = patches.map((o) => Boolean(o.sent) && !o.failed).lastIndexOf(true);
+      const foldable = patches.slice(lastInFlight + 1);
+      if (foldable.length === 0) {
+        await db().outbox.add({ type: "patch", eventId: id, patch: send, tries: 0, createdAt: Date.now() });
+        return;
+      }
+      const merged: { occurred_at?: string; payload?: Record<string, unknown> } = {};
+      for (const p of [...foldable.map((o) => o.patch), send]) {
+        if (p.occurred_at) merged.occurred_at = p.occurred_at;
+        if (p.payload) merged.payload = { ...(merged.payload ?? {}), ...p.payload };
+      }
+      const [first, ...rest] = foldable;
+      await db().outbox.put({ ...first, patch: merged, failed: false, sent: false, lastError: undefined });
+      if (rest.length) await db().outbox.bulkDelete(rest.map((o) => o.id!));
+    };
+    if (create && (create.type === "create" || create.type === "photo") && (!mayBeOnServer(create) || create.failed)) {
+      // The create has not reached the server (or was rejected): send it again with this
+      // edit in it, so a fix to a rejected entry goes out.
+      const input = ClientEventInput.parse({ ...create.input, occurred_at, payload });
+      await db().outbox.put({ ...create, input, failed: false, sent: false });
+      if (!mayBeOnServer(create)) {
+        // It never left the phone, so it now carries every change: older patches are not needed.
+        const patches = ops.filter((o) => o.type === "patch").map((o) => o.id!);
+        if (patches.length) await db().outbox.bulkDelete(patches);
+      } else {
+        // It went out once, so the server may hold the old copy (its reply was an error).
+        // The patch after it brings that copy up to date; on a fresh save it changes nothing.
+        await queuePatch();
+      }
     } else {
-      await db().outbox.add({ type: "patch", eventId: id, patch, tries: 0, createdAt: Date.now() });
+      // The create may already be on the server: the edit becomes its own patch, so the
+      // create's reply can never overwrite it.
+      await queuePatch();
     }
   });
+
+  if (anchorKind) {
+    for (const date of new Set([morningOf(current.occurred_at, settings.tz), morningOf(occurred_at, settings.tz)])) {
+      if (date) await replaceMorning(date, settings);
+    }
+  }
   void syncNow().then(() => {
-    if (reanalyze) pollForAnalysis();
+    if (textChanged) pollForAnalysis();
   });
 }
 
+/**
+ * Deletes an entry. If its create might already be on the server (sent, or long synced),
+ * a delete is queued; a tombstone stops any late reply or refresh from bringing it back.
+ */
 export async function removeEvent(id: string): Promise<void> {
-  await db().transaction("rw", db().events, db().outbox, db().photos, async () => {
+  const current = await db().events.get(id);
+  await db().transaction("rw", [db().events, db().outbox, db().photos, db().kv], async () => {
     const ops = await db().outbox.where("eventId").equals(id).toArray();
-    const unsynced = ops.some((o) => o.type === "create" || o.type === "photo");
+    const creates = ops.filter((o) => o.type === "create" || o.type === "photo");
+    // A create that ever went out may be on the server even if its reply was an error.
+    const serverMayHave = creates.length === 0 || creates.some(mayBeOnServer);
     await db().outbox.bulkDelete(ops.map((o) => o.id!));
     await db().events.delete(id);
     await db().photos.delete(id);
-    if (!unsynced) await db().outbox.add({ type: "delete", eventId: id, tries: 0, createdAt: Date.now() });
+    if (serverMayHave) await db().outbox.add({ type: "delete", eventId: id, tries: 0, createdAt: Date.now() });
+    await addTombstone(id);
   });
+  if (current && (current.kind === "wake" || current.kind === "sleep")) {
+    const settings = await currentSettings();
+    const date = morningOf(current.occurred_at, settings.tz);
+    if (date) await replaceMorning(date, settings);
+  }
   void syncNow();
+}
+
+/** Asks the server to read a meal again. Works only online; the timeline shows the new result. */
+export async function reanalyzeMeal(id: string): Promise<void> {
+  const current = await db().events.get(id);
+  if (!current || current.kind !== "meal") return;
+  await apiSend("POST", `/api/events/${id}/analyze`);
+  await db().events.put({ ...current, meta: { ...current.meta, ai_status: "pending", requested_at: new Date().toISOString() } });
+  pollForAnalysis();
+}
+
+/** A read that has been "pending" for over 3 minutes was cut off; offer to retry it. */
+export function analysisStuck(e: { kind: string; meta: Record<string, unknown>; updated_at: string; created_at: string }, now: Date): boolean {
+  if (e.kind !== "meal" || e.meta?.ai_status !== "pending") return false;
+  const since = typeof e.meta.requested_at === "string" ? e.meta.requested_at : e.updated_at || e.created_at;
+  return now.getTime() - new Date(since).getTime() > 3 * 60_000;
 }

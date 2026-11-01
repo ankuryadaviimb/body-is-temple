@@ -2,8 +2,8 @@ import { after } from "next/server";
 import { z } from "zod";
 import { analyzeMealEvent } from "@/lib/ai/meal";
 import { EventPatch } from "@/lib/domain/events";
-import { assertWriteAllowed, handleError, HttpError, json, readJson } from "@/lib/http/guard";
-import { deleteEvent, patchEvent, updateMeta } from "@/lib/server/events";
+import { assertWriteAllowed, handleError, HttpError, json, rateLimit, readJson } from "@/lib/http/guard";
+import { deleteEvent, patchEvent } from "@/lib/server/events";
 import { loadSettings } from "@/lib/server/settings";
 import { requireUser } from "@/lib/supabase/server";
 
@@ -20,23 +20,22 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     assertWriteAllowed(req);
     const ctx = await requireUser();
     const id = await eventId(params);
+    rateLimit(`patch:${ctx.userId}`, 600, 60 * 60_000);
     const patch = await readJson(req, EventPatch, 16_000);
     const settings = await loadSettings(ctx);
-    let event = await patchEvent(ctx, id, patch, settings);
-    // A slot picked by hand is final: the AI no longer corrects it.
-    if (event.kind === "meal" && typeof patch.payload?.slot === "string" && event.meta?.slot_locked !== true) {
-      const meta = { ...event.meta, slot_locked: true };
-      await updateMeta(ctx, id, meta);
-      event = { ...event, meta };
-    }
-    // A new description for a meal triggers a fresh background analysis.
-    if (event.kind === "meal" && typeof patch.payload?.text === "string" && patch.payload.text.trim()) {
-      const meta = { ...event.meta, ai_status: "pending" };
-      await updateMeta(ctx, id, meta);
-      event = { ...event, meta };
-      const snapshot = event;
-      after(() => analyzeMealEvent(ctx, snapshot, settings));
-    }
+    let textChanged = false;
+    // Meal flags are written in the same atomic write as the edit, from the row as it is then.
+    const event = await patchEvent(ctx, id, patch, settings, (current) => {
+      if (current.kind !== "meal") return null;
+      const fields: Record<string, unknown> = {};
+      // A slot picked by hand is final: the AI no longer corrects it.
+      if (typeof patch.payload?.slot === "string") fields.slot_locked = true;
+      // A new description triggers a fresh background read.
+      textChanged = typeof patch.payload?.text === "string" && patch.payload.text.trim().length > 0 && patch.payload.text !== current.payload.text;
+      if (textChanged) fields.ai_status = "pending";
+      return Object.keys(fields).length ? fields : null;
+    });
+    if (textChanged) after(() => analyzeMealEvent(ctx, event, settings));
     return json({ event });
   } catch (err) {
     return handleError(err, "events.patch");

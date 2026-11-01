@@ -1,4 +1,5 @@
 import { LoginForm } from "@/components/login-form";
+import { env } from "@/lib/env";
 
 export const metadata = { title: "Sign in · Temple" };
 
@@ -27,7 +28,7 @@ export default function LoginPage() {
         <Mark />
         <h1 className="mt-6 text-[34px] font-bold leading-tight tracking-tight">Temple</h1>
         <p className="mt-2 text-[17px] leading-relaxed text-ink-2">A calm, private coach for your gut and your fitness. Logging takes seconds.</p>
-        <LoginForm />
+        <LoginForm allowSignUp={env().ALLOW_SIGNUP} />
       </div>
       <p className="relative text-center text-xs leading-relaxed text-ink-3">
         Your logs live in your own database. Nothing is sold, shared or used to train AI.

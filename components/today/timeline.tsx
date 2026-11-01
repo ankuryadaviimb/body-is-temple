@@ -3,7 +3,8 @@
 import { useState } from "react";
 import { usePhotoUrl } from "@/lib/client/hooks";
 import { eventDetail, eventTitle, timeLabel } from "@/lib/client/labels";
-import { updateEvent } from "@/lib/client/log";
+import { analysisStuck, reanalyzeMeal, updateEvent } from "@/lib/client/log";
+import { retryFailed } from "@/lib/client/sync";
 import { usePendingDeletes } from "@/lib/client/pending-delete";
 import type { LocalEvent } from "@/lib/client/db";
 import { MEAL_SLOTS, type EventKind } from "@/lib/domain/events";
@@ -121,8 +122,45 @@ function EditSheet({ event, tz, onClose }: { event: LocalEvent; tz: string; onCl
     onClose();
   }
 
+  const status = event.meta?.ai_status;
+  const canRetry = event.kind === "meal" && (status === "failed" || analysisStuck(event, new Date()));
+  const { show } = useToast();
+
   return (
     <Sheet open title={eventTitle(event)} onClose={onClose}>
+      {event.sync === "error" ? (
+        <div className="mb-5 rounded-2xl bg-care/10 p-3.5">
+          <p className="text-[14px] leading-relaxed">This entry has not reached the server yet. It is safe on this phone.</p>
+          <button
+            type="button"
+            onClick={async () => {
+              await retryFailed(event.id);
+              show("Sending it again.", "info");
+              onClose();
+            }}
+            className="pressable mt-2.5 h-10 w-full rounded-xl bg-surface text-[15px] font-semibold text-brand"
+          >
+            Send it again
+          </button>
+        </div>
+      ) : null}
+      {canRetry ? (
+        <button
+          type="button"
+          onClick={async () => {
+            try {
+              await reanalyzeMeal(event.id);
+              show("Reading it again. Details appear in a few seconds.", "info");
+              onClose();
+            } catch {
+              show("Could not reach the server. Try again when online, or describe the meal below.", "tip");
+            }
+          }}
+          className="pressable mb-5 flex h-12 w-full items-center justify-center rounded-2xl bg-brand/15 text-[15px] font-semibold text-brand"
+        >
+          Read this meal again
+        </button>
+      ) : null}
       <Choice label="Day" value={date} onChange={setDate} options={dayOptions} />
       <label className="mb-5 block">
         <span className="mb-2 block text-[13px] font-semibold uppercase tracking-wide text-ink-3">Time</span>

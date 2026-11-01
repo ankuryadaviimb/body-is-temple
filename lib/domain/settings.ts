@@ -74,10 +74,19 @@ export const DEFAULT_SETTINGS: Settings = {
 /** Fields the user may change from the Settings screen (server-managed ones excluded). */
 export const SettingsUpdate = SettingsSchema.omit({ ladder_index: true, ladder_since: true }).partial();
 
-/** Fills missing fields with defaults so older stored documents keep working. */
+/**
+ * Fills missing fields with defaults so older stored documents keep working. A field that
+ * fails its own check falls back alone; the rest of the person's settings are kept.
+ */
 export function withDefaults(stored: unknown): Settings {
-  const merged = { ...DEFAULT_SETTINGS, ...(typeof stored === "object" && stored ? stored : {}) };
-  const parsed = SettingsSchema.safeParse(merged);
+  const source = (typeof stored === "object" && stored ? stored : {}) as Record<string, unknown>;
+  const repaired: Record<string, unknown> = { ...DEFAULT_SETTINGS };
+  const shape = SettingsSchema.shape as Record<string, z.ZodType>;
+  for (const key of Object.keys(DEFAULT_SETTINGS)) {
+    if (!(key in source)) continue;
+    if (shape[key]?.safeParse(source[key]).success) repaired[key] = source[key];
+  }
+  const parsed = SettingsSchema.safeParse(repaired);
   return parsed.success ? parsed.data : DEFAULT_SETTINGS;
 }
 

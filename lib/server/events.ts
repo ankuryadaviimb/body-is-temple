@@ -12,6 +12,7 @@ import { affectedCalendarDate, logicalDayFor, type Anchor } from "@/lib/domain/l
 import type { Settings } from "@/lib/domain/settings";
 import { addDays, localParts, localToInstant } from "@/lib/domain/time";
 import { HttpError } from "@/lib/http/guard";
+import { purgeMedia } from "./media";
 import type { AuthedContext } from "@/lib/supabase/server";
 
 const COLUMNS = "id, kind, occurred_at, logical_day, source, payload, meta, created_at, updated_at";
@@ -192,75 +193,155 @@ export async function recomputeMorning(ctx: AuthedContext, date: string, setting
   }
 }
 
+export type EventChange = { payload?: Record<string, unknown>; meta?: Record<string, unknown>; occurred_at?: string; logical_day?: string };
+
+/**
+ * Changes one event starting from the row as it is now. The write only lands if nobody
+ * changed the row in between (compare-and-swap on updated_at, which a trigger moves on
+ * every write); otherwise the row is read again and the change worked out again. So a
+ * background AI write and an edit from the phone can never undo each other.
+ * `change` returns null when there is nothing to do.
+ */
+export async function changeEvent(
+  ctx: AuthedContext,
+  id: string,
+  change: (current: StoredEvent) => EventChange | null | Promise<EventChange | null>,
+): Promise<{ event: StoredEvent | null; written: boolean }> {
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const [current] = await getEvents(ctx, [id]);
+    if (!current) return { event: null, written: false };
+    const next = await change(current);
+    if (!next) return { event: current, written: false };
+    const { data, error } = await ctx.supabase
+      .from("events")
+      .update(next)
+      .eq("user_id", ctx.userId)
+      .eq("id", id)
+      .eq("updated_at", current.updated_at)
+      .is("deleted_at", null)
+      .select(COLUMNS);
+    if (error) throw new Error("event_write_failed");
+    if (data && data.length > 0) return { event: data[0] as StoredEvent, written: true };
+  }
+  throw new Error("event_write_conflict");
+}
+
+/** Adds fields to an event's meta, keeping everything else on it as it is now. */
+export async function mergeMeta(ctx: AuthedContext, id: string, fields: Record<string, unknown>): Promise<StoredEvent | null> {
+  return (await changeEvent(ctx, id, (current) => ({ meta: { ...current.meta, ...fields } }))).event;
+}
+
+/**
+ * Applies an edit from the phone. `metaFor` may add meta fields in the same atomic write
+ * (for example "slot picked by hand"), worked out from the row as it is at that moment.
+ */
 export async function patchEvent(
   ctx: AuthedContext,
   id: string,
   patch: { occurred_at?: string; payload?: Record<string, unknown> },
   settings: Settings,
+  metaFor?: (current: StoredEvent, payload: Record<string, unknown>) => Record<string, unknown> | null,
 ): Promise<StoredEvent> {
-  const [current] = await getEvents(ctx, [id]);
-  if (!current) throw new HttpError(404, "Not found");
-  const kind = current.kind as EventKind;
-  const payload = patch.payload ? { ...current.payload, ...patch.payload } : current.payload;
-  const parsed = PayloadSchemas[kind].safeParse(payload);
-  if (!parsed.success) throw new HttpError(400, "Invalid request");
-  const occurredAt = patch.occurred_at ?? current.occurred_at;
-  assertReasonableTime(occurredAt);
+  let previousAt: string | null = null;
+  const { event } = await changeEvent(ctx, id, async (current) => {
+    previousAt = current.occurred_at;
+    const kind = current.kind as EventKind;
+    const payload = patch.payload ? { ...current.payload, ...patch.payload } : current.payload;
+    const parsed = PayloadSchemas[kind].safeParse(payload);
+    if (!parsed.success) throw new HttpError(400, "Invalid request");
+    const occurredAt = patch.occurred_at ?? current.occurred_at;
+    assertReasonableTime(occurredAt);
 
-  const p = localParts(occurredAt, settings.tz);
-  const around = await anchorsBetween(
-    ctx,
-    localToInstant(addDays(p.date, -1), 0, settings.tz).toISOString(),
-    localToInstant(addDays(p.date, 1), 0, settings.tz).toISOString(),
-  );
-  const anchors = around.filter((a) => !(kind === "wake" || kind === "sleep") || a.at !== current.occurred_at);
-  if (kind === "wake" || kind === "sleep") anchors.push({ kind, at: occurredAt });
-  const logicalDay = logicalDayFor(occurredAt, anchors, settings.tz, settings.day_start_hour);
+    const p = localParts(occurredAt, settings.tz);
+    const around = await anchorsBetween(
+      ctx,
+      localToInstant(addDays(p.date, -1), 0, settings.tz).toISOString(),
+      localToInstant(addDays(p.date, 1), 0, settings.tz).toISOString(),
+    );
+    const anchors = around.filter((a) => !(kind === "wake" || kind === "sleep") || a.at !== current.occurred_at);
+    if (kind === "wake" || kind === "sleep") anchors.push({ kind, at: occurredAt });
+    const logicalDay = logicalDayFor(occurredAt, anchors, settings.tz, settings.day_start_hour);
+    const extra = metaFor?.(current, parsed.data as Record<string, unknown>) ?? null;
+    return {
+      occurred_at: occurredAt,
+      payload: parsed.data as Record<string, unknown>,
+      logical_day: logicalDay,
+      ...(extra ? { meta: { ...current.meta, ...extra } } : {}),
+    };
+  });
+  if (!event) throw new HttpError(404, "Not found");
 
-  const { error } = await ctx.supabase
-    .from("events")
-    .update({ occurred_at: occurredAt, payload: parsed.data, logical_day: logicalDay })
-    .eq("user_id", ctx.userId)
-    .eq("id", id);
-  if (error) throw new Error("event_write_failed");
-
-  if (kind === "wake" || kind === "sleep") {
-    for (const at of [current.occurred_at, occurredAt]) {
+  if (event.kind === "wake" || event.kind === "sleep") {
+    for (const at of new Set([previousAt ?? event.occurred_at, event.occurred_at])) {
       const date = affectedCalendarDate(at, settings.tz);
       if (date) await recomputeMorning(ctx, date, settings);
     }
   }
   const [updated] = await getEvents(ctx, [id]);
-  return updated;
+  return updated ?? event;
 }
 
-/** Replaces a payload without moving the event (used to correct an auto meal slot). */
-export async function updatePayload(ctx: AuthedContext, id: string, payload: Record<string, unknown>): Promise<void> {
-  const { error } = await ctx.supabase.from("events").update({ payload }).eq("user_id", ctx.userId).eq("id", id);
-  if (error) throw new Error("event_write_failed");
-}
-
-/** Soft delete, so a stale offline retry can never bring a deleted event back. */
+/**
+ * Deletes an entry. The row stays only as an id with a deletion time (so a late retry
+ * from a phone cannot bring it back); its contents, kind and time are cleared and a meal
+ * photo is removed.
+ */
 export async function deleteEvent(ctx: AuthedContext, id: string, settings: Settings): Promise<void> {
   const [current] = await getEvents(ctx, [id]);
-  if (!current) return;
-  const { error } = await ctx.supabase
-    .from("events")
-    .update({ deleted_at: new Date().toISOString() })
-    .eq("user_id", ctx.userId)
-    .eq("id", id);
+  // Only the id and the deletion time stay: the kind and time of what was deleted go too.
+  const now = new Date().toISOString();
+  const tombstone = { deleted_at: now, payload: {}, meta: {}, kind: "note", occurred_at: now, logical_day: localParts(now, settings.tz).date };
+  if (!current) {
+    // Not here (yet): the phone may have given up waiting on a create that is still being
+    // saved. A deleted placeholder makes that late create a no-op (inserts skip known ids).
+    const { error } = await ctx.supabase.from("events").upsert({ id, user_id: ctx.userId, source: "app", ...tombstone }, { onConflict: "id", ignoreDuplicates: true });
+    if (error) throw new Error("event_write_failed");
+  }
+  // Also covers a create that landed between the read above and the placeholder.
+  const { error } = await ctx.supabase.from("events").update(tombstone).eq("user_id", ctx.userId).eq("id", id).is("deleted_at", null);
   if (error) throw new Error("event_write_failed");
+  if (!current) return;
+  const mediaId = typeof current.payload.media_id === "string" ? current.payload.media_id : null;
+  if (mediaId) await purgeMedia(ctx, mediaId).catch(() => undefined);
   if (current.kind === "wake" || current.kind === "sleep") {
     const date = affectedCalendarDate(current.occurred_at, settings.tz);
     if (date) await recomputeMorning(ctx, date, settings);
   }
 }
 
-export async function updateMeta(ctx: AuthedContext, id: string, meta: Record<string, unknown>): Promise<void> {
-  const { error } = await ctx.supabase
-    .from("events")
-    .update({ meta })
-    .eq("user_id", ctx.userId)
-    .eq("id", id);
-  if (error) throw new Error("event_write_failed");
+/**
+ * After a time zone or day-start change, puts every recent entry back on the right
+ * logical day (the last 120 days). Returns how many entries moved.
+ */
+export async function replaceAllDays(ctx: AuthedContext, settings: Settings, todayIso: string): Promise<number> {
+  const from = new Date(new Date(todayIso).getTime() - 121 * 86_400_000).toISOString();
+  const to = new Date(new Date(todayIso).getTime() + 2 * 86_400_000).toISOString();
+  const rows: { id: string; kind: string; occurred_at: string; logical_day: string }[] = [];
+  for (let page = 0; page < 20; page++) {
+    const { data, error } = await ctx.supabase
+      .from("events")
+      .select("id, kind, occurred_at, logical_day")
+      .eq("user_id", ctx.userId)
+      .is("deleted_at", null)
+      .gte("occurred_at", from)
+      .lte("occurred_at", to)
+      .order("occurred_at")
+      .order("id")
+      .range(page * PAGE, page * PAGE + PAGE - 1);
+    if (error) throw new Error("event_read_failed");
+    rows.push(...((data ?? []) as typeof rows));
+    if ((data ?? []).length < PAGE) break;
+  }
+  const anchors: Anchor[] = rows.filter((r) => r.kind === "wake" || r.kind === "sleep").map((r) => ({ kind: r.kind as Anchor["kind"], at: r.occurred_at }));
+  const moves = rows
+    .map((r) => ({ id: r.id, day: logicalDayFor(r.occurred_at, anchors, settings.tz, settings.day_start_hour), was: r.logical_day }))
+    .filter((m) => m.day !== m.was);
+  let moved = 0;
+  for (let i = 0; i < moves.length; i += 500) {
+    const chunk = moves.slice(i, i + 500);
+    const { data, error } = await ctx.supabase.rpc("set_logical_days", { p_ids: chunk.map((m) => m.id), p_days: chunk.map((m) => m.day) });
+    if (error) throw new Error("event_write_failed");
+    moved += typeof data === "number" ? data : 0;
+  }
+  return moved;
 }

@@ -1,9 +1,9 @@
 import { after } from "next/server";
 import { analyzeMealEvent } from "@/lib/ai/meal";
 import { ClientEventInput } from "@/lib/domain/events";
-import { assertWriteAllowed, handleError, HttpError, json } from "@/lib/http/guard";
+import { assertWriteAllowed, handleError, HttpError, json, rateLimit } from "@/lib/http/guard";
 import { insertEvents } from "@/lib/server/events";
-import { MAX_UPLOAD_BYTES, storeMedia } from "@/lib/server/media";
+import { MAX_UPLOAD_BYTES, removeStoredFile, storeMedia } from "@/lib/server/media";
 import { loadSettings } from "@/lib/server/settings";
 import { requireUser } from "@/lib/supabase/server";
 
@@ -18,6 +18,7 @@ export async function POST(req: Request) {
   try {
     assertWriteAllowed(req);
     const ctx = await requireUser();
+    rateLimit(`photo:${ctx.userId}`, 120, 60 * 60_000);
     const declared = Number(req.headers.get("content-length") ?? "0");
     if (declared > MAX_UPLOAD_BYTES + 64_000) throw new HttpError(413, "File too large");
 
@@ -45,7 +46,11 @@ export async function POST(req: Request) {
       "app",
       settings,
     );
-    if (!stored) throw new HttpError(409, "Could not save");
+    if (!stored) {
+      // The id is already deleted (on another device): keep no photo for it.
+      await removeStoredFile(ctx, input.id).catch(() => undefined);
+      throw new HttpError(409, "Could not save");
+    }
 
     if (stored.meta?.ai_status === "pending") {
       after(() => analyzeMealEvent(ctx, stored, settings));

@@ -21,13 +21,18 @@ export function MealTile({ sub }: { sub: string }) {
   async function handle(files: FileList | null, fromCamera: boolean) {
     if (!files || files.length === 0) return;
     setBusy(true);
+    let failed = 0;
     try {
+      // One unreadable photo never stops the rest of the pick.
       for (const file of Array.from(files).slice(0, 6)) {
-        const { blob, takenAt } = await prepareMealPhoto(file, fromCamera);
-        logged(await logEvent("meal", {}, { at: takenAt ?? new Date(), photo: blob }), "Meal saved. Details appear in a few seconds.");
+        try {
+          const { blob, takenAt } = await prepareMealPhoto(file, fromCamera);
+          logged(await logEvent("meal", {}, { at: takenAt ?? new Date(), photo: blob }), "Meal saved. Details appear in a few seconds.");
+        } catch {
+          failed += 1;
+        }
       }
-    } catch {
-      show("Could not read that photo. Try again, or describe the meal from More.", "tip");
+      if (failed > 0) show(`Could not read ${failed === 1 ? "one photo" : `${failed} photos`}. Try again, or describe the meal from Earlier entry.`, "tip");
     } finally {
       setBusy(false);
       if (camera.current) camera.current.value = "";

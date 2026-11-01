@@ -53,28 +53,18 @@ export class ProviderError extends Error {
   }
 }
 
-async function bumpUsage(ctx: AuthedContext, provider: ProviderId, tz: string, inTok: number, outTok: number) {
+/** Counts one request before it is made, so parallel calls cannot slip past the daily cap. */
+async function reserveRequest(ctx: AuthedContext, provider: ProviderId, tz: string): Promise<number> {
   const day = localParts(new Date(), tz).date;
-  const { data, error } = await ctx.supabase.rpc("bump_ai_usage", {
-    p_day: day,
-    p_provider: provider,
-    p_in: inTok,
-    p_out: outTok,
-  });
+  const { data, error } = await ctx.supabase.rpc("bump_ai_usage", { p_day: day, p_provider: provider, p_in: 0, p_out: 0 });
   if (error) throw new Error("usage_write_failed");
   return typeof data === "number" ? data : 0;
 }
 
-async function usageToday(ctx: AuthedContext, provider: ProviderId, tz: string): Promise<number> {
+async function recordTokens(ctx: AuthedContext, provider: ProviderId, tz: string, inTok: number, outTok: number): Promise<void> {
+  if (inTok <= 0 && outTok <= 0) return;
   const day = localParts(new Date(), tz).date;
-  const { data } = await ctx.supabase
-    .from("ai_usage")
-    .select("requests")
-    .eq("user_id", ctx.userId)
-    .eq("day", day)
-    .eq("provider", provider)
-    .maybeSingle();
-  return (data?.requests as number | undefined) ?? 0;
+  await ctx.supabase.rpc("record_ai_tokens", { p_day: day, p_provider: provider, p_in: inTok, p_out: outTok });
 }
 
 export type ChatResult = { text: string; provider: ProviderId; model: string };
@@ -88,7 +78,8 @@ export async function chat(
 ): Promise<ChatResult> {
   const cfg = config(provider);
   if (!cfg) throw new ProviderError(provider, "not_configured");
-  if ((await usageToday(ctx, provider, opts.tz)) >= DAILY_CAPS[provider]) {
+  // Reserve first: every attempt counts, including ones that time out.
+  if ((await reserveRequest(ctx, provider, opts.tz)) > DAILY_CAPS[provider]) {
     throw new ProviderError(provider, "over_budget");
   }
   const model = cfg.models[task];
@@ -114,15 +105,12 @@ export async function chat(
   } catch {
     throw new ProviderError(provider, "timeout");
   }
-  if (!res.ok) {
-    await bumpUsage(ctx, provider, opts.tz, 0, 0);
-    throw new ProviderError(provider, "http", res.status);
-  }
+  if (!res.ok) throw new ProviderError(provider, "http", res.status);
   const data = (await res.json()) as {
     choices?: { message?: { content?: string | null } }[];
     usage?: { prompt_tokens?: number; completion_tokens?: number };
   };
-  await bumpUsage(ctx, provider, opts.tz, data.usage?.prompt_tokens ?? 0, data.usage?.completion_tokens ?? 0);
+  await recordTokens(ctx, provider, opts.tz, data.usage?.prompt_tokens ?? 0, data.usage?.completion_tokens ?? 0).catch(() => undefined);
   const text = data.choices?.[0]?.message?.content ?? "";
   if (!text.trim()) throw new ProviderError(provider, "empty");
   return { text, provider, model };

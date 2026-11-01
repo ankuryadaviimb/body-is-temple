@@ -1,7 +1,12 @@
+"use client";
+
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { queueAsk } from "@/lib/client/coach";
+import type { CoachChip } from "@/lib/domain/coach/intents";
 import { ChatIcon, ChevronRightIcon } from "../icons";
 
-const QUICK = [
+const QUICK: { intent: CoachChip["intent"]; label: string }[] = [
   { intent: "gas", label: "Why am I gassy?" },
   { intent: "ate_right", label: "Did I eat right?" },
   { intent: "dinner", label: "What for dinner?" },
@@ -9,6 +14,7 @@ const QUICK = [
 
 /** Entry to the coach from Today: one tap opens a ready answer. */
 export function AskCard() {
+  const router = useRouter();
   return (
     <section aria-label="Ask Temple" className="rounded-[24px] bg-surface p-4 shadow-card">
       <Link href="/coach" className="pressable flex items-center gap-3">
@@ -23,9 +29,17 @@ export function AskCard() {
       </Link>
       <div className="no-scrollbar -mx-4 mt-3 flex gap-2 overflow-x-auto px-4">
         {QUICK.map((q) => (
-          <Link key={q.intent} href={`/coach?ask=${q.intent}`} className="pressable shrink-0 whitespace-nowrap rounded-full bg-surface-2 px-3.5 py-2 text-[14px] font-medium">
+          <button
+            key={q.intent}
+            type="button"
+            onClick={async () => {
+              await queueAsk(q.intent);
+              router.push("/coach");
+            }}
+            className="pressable shrink-0 whitespace-nowrap rounded-full bg-surface-2 px-3.5 py-2 text-[14px] font-medium"
+          >
             {q.label}
-          </Link>
+          </button>
         ))}
       </div>
     </section>

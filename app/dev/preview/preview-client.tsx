@@ -6,6 +6,8 @@ import { CoachScreen } from "@/components/coach/coach-screen";
 import { InsightsScreen } from "@/components/insights/insights-screen";
 import { MemoryScreen } from "@/components/memory/memory-screen";
 import { NutritionScreen } from "@/components/nutrition/nutrition-screen";
+import { ReportScreen } from "@/components/report/report-screen";
+import { RecordsScreen } from "@/components/records/records-screen";
 import { ExerciseFigure } from "@/components/exercise-figure";
 import type { Pose } from "@/lib/content/poses";
 import { HistoryScreen } from "@/components/history/history-screen";
@@ -20,6 +22,7 @@ import { RESETS } from "@/lib/content/resets";
 import type { CoachMessage } from "@/lib/domain/coach/message";
 import type { EventKind } from "@/lib/domain/events";
 import type { MemoryFile } from "@/lib/domain/memory";
+import type { HealthDocument, LabMarker } from "@/lib/domain/records";
 import type { ToleranceReport } from "@/lib/domain/tolerance";
 import { logicalDayFor } from "@/lib/domain/logical-day";
 import { DEFAULT_SETTINGS } from "@/lib/domain/settings";
@@ -108,6 +111,7 @@ async function seed() {
   await kvSet("coach_messages", SAMPLE_MESSAGES(today));
   await kvSet("insights", { report: SAMPLE_REPORT, windowDays: 90, fetchedAt: Date.now() });
   await kvSet("memory", SAMPLE_MEMORY);
+  await kvSet("documents", SAMPLE_DOCUMENTS(today));
 }
 
 const SAMPLE_CARD = (day: string) => ({
@@ -226,6 +230,111 @@ const SAMPLE_REPORT: ToleranceReport = {
   outcomeDays: { evening_gas: 15, next_rounds: 20, next_smooth: 17, heavy: 21 },
 };
 
+const marker = (name: string, value: number, unit: string, low: number, high: number): LabMarker => ({
+  name,
+  raw_name: name,
+  value,
+  value_text: String(value),
+  unit,
+  ref_low: low,
+  ref_high: high,
+  ref_text: `${low} - ${high}`,
+  flag: value < low ? "low" : value > high ? "high" : "normal",
+});
+
+/** Made-up records for design review only (not anyone's real results). */
+const SAMPLE_DOCUMENTS = (day: string): HealthDocument[] => {
+  const recent = addDays(day, -50);
+  const older = addDays(day, -240);
+  return [
+    {
+      id: "00000000-0000-4000-8000-0000000d0001",
+      kind: "blood_report",
+      title: "CBC, iron and vitamins",
+      doc_date: recent,
+      notes: null,
+      status: "done",
+      extraction: {
+        doc_date: recent,
+        markers: [
+          marker("Hemoglobin", 13.4, "g/dL", 13, 17),
+          marker("Ferritin", 24, "ng/mL", 30, 400),
+          marker("Vitamin D (25-OH)", 19, "ng/mL", 30, 100),
+          marker("Vitamin B12", 340, "pg/mL", 200, 900),
+          marker("TSH", 2.2, "uIU/mL", 0.4, 4.2),
+          marker("HbA1c", 5.4, "%", 4, 5.6),
+        ],
+        summary: ["Ferritin and vitamin D are below the range.", "Hemoglobin, B12, TSH and HbA1c are in range."],
+      },
+      pages: 4,
+      mime: "application/pdf",
+      created_at: new Date(Date.now() - 3 * 86_400_000).toISOString(),
+      updated_at: new Date(Date.now() - 3 * 86_400_000).toISOString(),
+    },
+    {
+      id: "00000000-0000-4000-8000-0000000d0002",
+      kind: "consultation",
+      title: "Gastroenterology follow-up",
+      doc_date: addDays(day, -20),
+      notes: "Asked about biofeedback sessions. Continue Isabgol at night.",
+      status: "consent",
+      extraction: null,
+      pages: 1,
+      mime: "application/pdf",
+      created_at: new Date(Date.now() - 20 * 86_400_000).toISOString(),
+      updated_at: new Date(Date.now() - 20 * 86_400_000).toISOString(),
+    },
+    {
+      id: "00000000-0000-4000-8000-0000000d0003",
+      kind: "scan",
+      title: "Abdomen ultrasound",
+      doc_date: addDays(day, -120),
+      notes: null,
+      status: "no_text",
+      extraction: null,
+      pages: 2,
+      mime: "application/pdf",
+      created_at: new Date(Date.now() - 120 * 86_400_000).toISOString(),
+      updated_at: new Date(Date.now() - 120 * 86_400_000).toISOString(),
+    },
+    {
+      id: "00000000-0000-4000-8000-0000000d0004",
+      kind: "prescription",
+      title: "Prescription photo",
+      doc_date: null,
+      notes: null,
+      status: "image",
+      extraction: null,
+      pages: null,
+      mime: "image/jpeg",
+      created_at: new Date(Date.now() - 2 * 86_400_000).toISOString(),
+      updated_at: new Date(Date.now() - 2 * 86_400_000).toISOString(),
+    },
+    {
+      id: "00000000-0000-4000-8000-0000000d0005",
+      kind: "blood_report",
+      title: "Annual health check",
+      doc_date: older,
+      notes: null,
+      status: "done",
+      extraction: {
+        doc_date: older,
+        markers: [
+          marker("Hemoglobin", 12.8, "g/dL", 13, 17),
+          marker("Ferritin", 18, "ng/mL", 30, 400),
+          marker("Vitamin D (25-OH)", 14, "ng/mL", 30, 100),
+          marker("HbA1c", 5.5, "%", 4, 5.6),
+        ],
+        summary: ["Hemoglobin, ferritin and vitamin D are below the range."],
+      },
+      pages: 6,
+      mime: "application/pdf",
+      created_at: new Date(Date.now() - 240 * 86_400_000).toISOString(),
+      updated_at: new Date(Date.now() - 240 * 86_400_000).toISOString(),
+    },
+  ];
+};
+
 const SAMPLE_MEMORY: MemoryFile[] = [
   { slug: "profile", content: "- Sample note: usually 2 to 3 morning rounds.\n- Sample note: a heavy feeling some afternoons.", version: 1, updated_at: new Date().toISOString() },
   { slug: "gut", content: "- Feet on a stool, breathe out on every push.\n- 5 minutes at most.\n- Isabgol about 90 minutes after dinner.", version: 2, updated_at: new Date().toISOString() },
@@ -257,6 +366,10 @@ export function PreviewClient({ screen }: { screen: string }) {
       <MemoryScreen />
     ) : screen === "nutrition" ? (
       <NutritionScreen />
+    ) : screen === "report" ? (
+      <ReportScreen />
+    ) : screen === "records" ? (
+      <RecordsScreen />
     ) : screen === "exercises" ? (
       <Gallery />
     ) : (

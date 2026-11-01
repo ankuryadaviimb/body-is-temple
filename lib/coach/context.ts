@@ -7,6 +7,7 @@ import { LADDER } from "@/lib/domain/ladder";
 import { memoryForPrompt, type MemoryFile, type MemorySlug } from "@/lib/domain/memory";
 import { dailyTargets } from "@/lib/domain/nutrition";
 import type { Settings } from "@/lib/domain/settings";
+import { labsForPrompt, type MarkerTrend } from "@/lib/domain/records";
 import { describeFinding, MIN_DAYS, type ToleranceReport } from "@/lib/domain/tolerance";
 import { addDays, formatClock, localParts, zoneDisplay } from "@/lib/domain/time";
 
@@ -23,6 +24,10 @@ export type CoachData = {
   byDay: Map<string, StoredEvent[]>;
   memory: MemoryFile[];
   tolerance: ToleranceReport;
+  /** Latest lab values from uploaded reports (empty when none). */
+  labs?: MarkerTrend[];
+  /** Recent doctor visits: the person's notes and what was read (empty when none). */
+  visits?: string;
 };
 
 export function groupByDay(events: StoredEvent[]): Map<string, StoredEvent[]> {
@@ -139,6 +144,8 @@ export function askPrompt(input: {
     `MEMORY:\n${memoryForPrompt(data.memory.filter((m) => MEMORY_BY_INTENT[input.intent].includes(m.slug))) || "No memory notes yet."}`,
     `LOGS (last ${DIGEST_DAYS} days, oldest first):\n${logsText(data.byDay, today, settings, true)}`,
     `PATTERNS:\n${patternsText(data.tolerance)}`,
+    ...(data.labs?.length ? [`LABS (from uploaded reports, latest first):\n${labsForPrompt(data.labs)}`] : []),
+    ...(data.visits ? [`DOCTOR VISITS (latest first):\n${data.visits}`] : []),
     `EVIDENCE:\n${evidenceText(evidenceFor(input.intent))}`,
   ];
   if (input.earlier.length) {
@@ -159,6 +166,8 @@ export function cardPrompt(input: { data: CoachData; settings: Settings; today: 
     `LOGS (last ${DIGEST_DAYS - 1} days, yesterday last):\n${logsText(data.byDay, today, settings, false)}`,
     `THIS MORNING SO FAR:\n${dayDigest(today, data.byDay.get(today) ?? [], settings.tz, "today", settings)}`,
     `PATTERNS:\n${patternsText(data.tolerance)}`,
+    ...(data.labs?.length ? [`LABS (from uploaded reports, latest first):\n${labsForPrompt(data.labs)}`] : []),
+    ...(data.visits ? [`DOCTOR VISITS (latest first):\n${data.visits}`] : []),
     `EVIDENCE:\n${evidenceText(evidenceFor("morning"))}`,
   ].join("\n\n");
 }

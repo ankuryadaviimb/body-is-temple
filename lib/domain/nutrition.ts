@@ -224,7 +224,10 @@ export function gaps(n: DayNutrition, t: Targets, now: Date, tz: string): Gap[] 
   }
   const fiber = mid(n.fiber);
   if (n.macrosKnown && fiber < t.fiber * share * 0.8) {
-    out.push({ key: "fiber", text: `Fiber is about ${Math.max(0, Math.round(t.fiber * share) - fiber)} g behind. Add cooked vegetables, a fruit or oats.` });
+    out.push({
+      key: "fiber",
+      text: `Fiber is about ${Math.max(0, Math.round(t.fiber * share) - fiber)} g behind. Gentle options: cooked vegetables, papaya or oats. Add fiber slowly, since a sudden jump can bring gas.`,
+    });
   }
   const plants = n.veg + n.fruit;
   if (n.detailsKnown && plants < t.plants * share * 0.6) {
