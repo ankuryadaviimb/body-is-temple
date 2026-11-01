@@ -78,6 +78,8 @@ const shortText = z.string().trim().max(500);
 export const PayloadSchemas = {
   wake: z.strictObject({ mood: z.int().min(1).max(5).optional() }),
   sleep: z.strictObject({}),
+  /** A daytime nap: logged when it starts, minutes added on waking ("I'm up"). */
+  nap: z.strictObject({ minutes: z.int().min(1).max(360).optional() }),
   water: z.strictObject({ ml: z.int().min(50).max(2000) }),
   drink: z.strictObject({
     type: z.enum(["tea", "coffee", "amla", "chia", "juice", "milk", "buttermilk", "other"]),
@@ -93,6 +95,8 @@ export const PayloadSchemas = {
     slot_chosen: z.boolean().optional(),
     media_id: z.uuid().optional(),
     text: shortText.optional(),
+    /** One of the person's usual foods (Settings), whose label values are known, so no AI. */
+    usual: z.string().regex(/^[a-z0-9-]{1,40}$/).optional(),
   }),
   toilet: z.strictObject({
     duration_s: z.int().min(0).max(3600),
@@ -160,6 +164,7 @@ function eventSchema<K extends EventKind>(kind: K) {
 export const ClientEventInput = z.discriminatedUnion("kind", [
   eventSchema("wake"),
   eventSchema("sleep"),
+  eventSchema("nap"),
   eventSchema("water"),
   eventSchema("drink"),
   eventSchema("isabgol"),

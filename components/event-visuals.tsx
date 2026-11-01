@@ -1,4 +1,5 @@
 import type { EventKind } from "@/lib/domain/events";
+import type { UsualIcon } from "@/lib/domain/usual-foods";
 import {
   CupIcon,
   DropIcon,
@@ -18,6 +19,13 @@ import {
   ClockIcon,
   LeafIcon,
   SeedsIcon,
+  NapIcon,
+  BarIcon,
+  BowlIcon,
+  EggIcon,
+  FruitIcon,
+  NutsIcon,
+  ScoopIcon,
 } from "./icons";
 
 type Visual = { Icon: (p: { className?: string }) => React.ReactNode; tint: string };
@@ -31,6 +39,7 @@ export const EVENT_VISUALS: Record<EventKind, Visual> = {
   isabgol: { Icon: SpoonIcon, tint: "bg-gut/15 text-gut" },
   wake: { Icon: SunIcon, tint: "bg-fuel/15 text-fuel" },
   sleep: { Icon: MoonIcon, tint: "bg-rest/15 text-rest" },
+  nap: { Icon: NapIcon, tint: "bg-rest/15 text-rest" },
   practice: { Icon: FeatherIcon, tint: "bg-gut/15 text-gut" },
   sensation: { Icon: FeatherIcon, tint: "bg-surface-3 text-ink-2" },
   gas: { Icon: WindIcon, tint: "bg-surface-3 text-ink-2" },
@@ -43,6 +52,18 @@ export const EVENT_VISUALS: Record<EventKind, Visual> = {
   late_work: { Icon: ClockIcon, tint: "bg-surface-3 text-ink-2" },
   symptom: { Icon: AlertIcon, tint: "bg-care/15 text-care" },
   note: { Icon: NoteIcon, tint: "bg-surface-3 text-ink-2" },
+};
+
+/** Icons a usual food can wear on its one-tap button. */
+export const USUAL_ICON: Record<UsualIcon, Visual["Icon"]> = {
+  bar: BarIcon,
+  fruit: FruitIcon,
+  scoop: ScoopIcon,
+  bowl: BowlIcon,
+  cup: CupIcon,
+  nuts: NutsIcon,
+  egg: EggIcon,
+  plate: PlateIcon,
 };
 
 /** Drinks made with water get their own look, so amla and chia stand out from tea. */

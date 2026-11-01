@@ -14,6 +14,8 @@ import { zoneLabel } from "@/lib/domain/time";
 import { BookIcon, ChartIcon, ChevronRightIcon, NoteIcon, PlusIcon, TrashIcon } from "../icons";
 import { useToast } from "../toast";
 import { TimeZoneSheet } from "./time-zone-sheet";
+import { UsualFoodsGroup } from "./usual-foods";
+import type { UsualFood } from "@/lib/domain/usual-foods";
 
 type ClassRow = Settings["classes"][number];
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -69,6 +71,23 @@ function SettingsForm({ initial }: { initial: Settings }) {
       show(err instanceof ApiError && err.status === 400 ? "Some values are out of range. Check the highlighted fields." : "Could not save. Check your connection and try again.", "tip");
     } finally {
       setSaving(false);
+    }
+  }
+
+  /** Usual foods save at once, together with any other valid edits on the page. */
+  async function saveUsualFoods(list: UsualFood[]) {
+    const next = { ...form, usual_foods: list };
+    setForm(next);
+    const { ladder_index: _a, ladder_since: _b, ...rest } = next;
+    void _a;
+    void _b;
+    const body = SettingsUpdate.safeParse(rest).success ? rest : { usual_foods: list };
+    try {
+      await apiSend("PUT", "/api/settings", body);
+      await refreshFromServer();
+      show("Usual foods saved.", "good");
+    } catch {
+      show("Could not save. Check your connection and try again.", "tip");
     }
   }
 
@@ -197,6 +216,8 @@ function SettingsForm({ initial }: { initial: Settings }) {
           <ChevronRightIcon className="size-4 shrink-0 text-ink-3" />
         </button>
       </Group>
+
+      <UsualFoodsGroup foods={form.usual_foods} onChange={(list) => void saveUsualFoods(list)} />
 
       <Group title="Weekly classes" note="Your class days, so rest days never count against you.">
         {form.classes.map((c, i) => (

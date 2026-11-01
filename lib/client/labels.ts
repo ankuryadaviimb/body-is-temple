@@ -23,6 +23,13 @@ const DRINK_LABEL: Record<string, string> = {
   other: "Drink",
 };
 
+/** "45 min", "1 h 20 min". */
+export function durationLabel(minutes: number): string {
+  const m = Math.max(0, Math.round(minutes));
+  if (m < 60) return `${m} min`;
+  return m % 60 === 0 ? `${m / 60} h` : `${Math.floor(m / 60)} h ${m % 60} min`;
+}
+
 export function timeLabel(e: StoredEvent, tz: string): string {
   return formatClock(localParts(e.occurred_at, tz).minutes);
 }
@@ -44,6 +51,8 @@ export function eventTitle(e: StoredEvent): string {
       return "Woke up";
     case "sleep":
       return "Went to bed";
+    case "nap":
+      return typeof p.minutes === "number" ? `Nap ${durationLabel(p.minutes)}` : "Napping";
     case "practice":
       return "Breathing practice";
     case "sensation":
@@ -83,7 +92,8 @@ export function eventDetail(e: StoredEvent): string | null {
         .join(", ");
       const mid = (x: { low: number; high: number }) => Math.round((x.low + x.high) / 2);
       const macros = [`protein ${mid(a.protein_g)} g`, a.carbs_g ? `carbs ${mid(a.carbs_g)} g` : null, a.fiber_g ? `fiber ${mid(a.fiber_g)} g` : null, `${mid(a.kcal)} kcal`].filter(Boolean);
-      return `${names} · about ${macros.join(", ")}`;
+      // A usual food's values come from its label, so they are exact, not "about".
+      return `${names} · ${typeof p.usual === "string" ? "" : "about "}${macros.join(", ")}`;
     }
     const status = e.meta?.ai_status;
     if (status === "pending") return typeof p.text === "string" ? `"${p.text}" (reading it...)` : "Reading the photo...";

@@ -26,6 +26,7 @@ import type { HealthDocument, LabMarker } from "@/lib/domain/records";
 import type { ToleranceReport } from "@/lib/domain/tolerance";
 import { logicalDayFor } from "@/lib/domain/logical-day";
 import { DEFAULT_SETTINGS } from "@/lib/domain/settings";
+import type { UsualFood } from "@/lib/domain/usual-foods";
 import type { CachedSnapshot } from "@/lib/domain/snapshot";
 import { addDays, localToInstant } from "@/lib/domain/time";
 
@@ -74,7 +75,32 @@ const meal = (items: string[], tags: string[], protein: [number, number], kcal: 
 async function seed() {
   const today = logicalDayFor(new Date().toISOString(), [], TZ);
   const yesterday = addDays(today, -1);
-  const settings = { ...DEFAULT_SETTINGS, tz: TZ, weight_kg: 72, height_cm: 175, birth_year: 1989, sex: "male" as const, protein_target_g: 100 };
+  const sampleFood = (id: string, label: string, icon: UsualFood["icon"], protein_g: number, kcal: number): UsualFood => ({
+    id,
+    name: `Sample ${label.toLowerCase()}`,
+    label,
+    serving: "1 serving",
+    icon,
+    kcal,
+    protein_g,
+    carbs_g: 10,
+    fat_g: 5,
+    fiber_g: 2,
+    tags: [],
+    nutrients: [],
+    fruit_servings: icon === "fruit" ? 1 : 0,
+    snack: true,
+  });
+  const settings = {
+    ...DEFAULT_SETTINGS,
+    tz: TZ,
+    weight_kg: 72,
+    height_cm: 175,
+    birth_year: 1989,
+    sex: "male" as const,
+    protein_target_g: 100,
+    usual_foods: [sampleFood("granola-bar", "Granola bar", "bar", 6, 190), sampleFood("apple", "Apple", "fruit", 0.5, 80), sampleFood("curd-bowl", "Curd bowl", "bowl", 8, 120)],
+  };
   const todayEvents = sampleDay(today, [
     ["08:50", "wake", { mood: 4 }],
     ["08:52", "water", { ml: 250 }],
@@ -97,7 +123,12 @@ async function seed() {
     ["01:05", "isabgol", { tsp: 1, water_ml: 200 }],
   ]);
   await db().events.clear();
-  await db().events.bulkPut([...todayEvents, ...yesterdayEvents]);
+  // ?nap=1 shows a nap that started 25 minutes ago.
+  const napAt = new Date(Date.now() - 25 * 60_000).toISOString();
+  const nap: LocalEvent[] = new URLSearchParams(window.location.search).get("nap")
+    ? [{ id: "00000000-0000-4000-8000-00000000nap1".replace("nap1", "0a01"), kind: "nap", occurred_at: napAt, logical_day: today, source: "app", payload: {}, meta: {}, created_at: napAt, updated_at: napAt, sync: "synced" }]
+    : [];
+  await db().events.bulkPut([...todayEvents, ...yesterdayEvents, ...nap]);
   const snapshot: CachedSnapshot = {
     today,
     settings,

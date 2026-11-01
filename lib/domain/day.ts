@@ -201,3 +201,25 @@ export function practiceMinutes(dayEvents: StoredEvent[]): number {
     ofKind(dayEvents, "practice").reduce((s, e) => s + (payloadOf(e, "practice")?.duration_s ?? 0), 0) / 60,
   );
 }
+
+/** A nap still running is shown on Today until "I'm up", for at most this long. */
+export const NAP_OPEN_MAX_MIN = 6 * 60;
+
+/** The nap started but not yet ended (no minutes), if it began within the last 6 hours. */
+export function openNap(dayEvents: StoredEvent[], now: Date): StoredEvent | null {
+  const nap = ofKind(dayEvents, "nap").at(-1);
+  if (!nap || typeof nap.payload.minutes === "number") return null;
+  const since = now.getTime() - new Date(nap.occurred_at).getTime();
+  return since >= -60_000 && since <= NAP_OPEN_MAX_MIN * 60_000 ? nap : null;
+}
+
+/** Minutes from a nap's start to now, within the nap's allowed range (1 to 360). */
+export function napMinutesUntil(nap: StoredEvent, now: Date): number {
+  const m = Math.round((now.getTime() - new Date(nap.occurred_at).getTime()) / 60_000);
+  return Math.min(360, Math.max(1, m));
+}
+
+/** Daytime sleep in minutes (finished naps only). */
+export function napMinutes(dayEvents: StoredEvent[]): number {
+  return ofKind(dayEvents, "nap").reduce((sum, e) => sum + (typeof e.payload.minutes === "number" ? e.payload.minutes : 0), 0);
+}

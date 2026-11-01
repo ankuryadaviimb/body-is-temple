@@ -3,15 +3,16 @@
 A private, self-hosted gut and fitness coach for iPhone, built as a Home Screen web app.
 It is designed around one rule: logging must take seconds, or people stop doing it.
 
-- **One-tap logging:** meals by photo, toilet visits, water (your own glass size), tea (your own cup), amla and chia seed water, Isabgol, gas, walks and workouts.
+- **One-tap logging:** toilet visits, water (your own glass size), tea (your own cup), amla and chia seed water, Isabgol, walks, naps ("Nap" when you lie down, "I'm up" when you wake), gas and workouts. The Meal tile opens every way to log food at once: type it, take a photo, pick photos, or tap a usual food; the camera stays one tap away on the tile's corner.
+- **Usual foods:** the packaged or fixed-portion foods you eat often (a protein bar, one scoop of protein, a small banana), with the values from the label. One tap logs them with exact protein and calories, no AI and no waiting, even offline. Add, edit or remove them in Settings.
 - **Health records:** upload blood reports, consultations, prescriptions and scans (PDF or photo). When you allow it, the values are read into results with reference ranges and high or low flags, with trends across reports; the coach takes the latest values into account, and anemia signs always point to a doctor.
 - **Your data, yours to keep:** pull down on Today to sync now, see the last sync time in Settings, export everything as one JSON file, and print a gut diary (bowel diary) for your doctor or pelvic floor physio.
-- **Log anything later:** "Earlier entry" (on Today's log, and in More) saves a meal (typed, with an optional photo and meal type), toilet visit, water, tea, amla or chia water, Isabgol, walk, gas or workout at the time it happened, today or yesterday. Any entry can also be moved to another time or day. A time later than now on "Today" is read as last night, never the future.
+- **Log anything later:** "Earlier entry" (on Today's log, and in More) saves a meal (typed, photos or a usual food, with the meal type), toilet visit, water, tea, amla or chia water, Isabgol, walk, nap, gas or workout at the time it happened, today or yesterday. The time starts at the phone's current time. Any entry can also be moved to another time or day. It never saves in the future: a time up to 90 minutes later than now on "Today" saves as now (a rounded "now"), and a time much later is read as last night; the screen says which before you save.
 - **Toilet visits without the phone inside:** "I just went" (when and about how long, then a few taps), or "Going now" (the start time is saved, rate it when you are back). A breathing guide is there for anyone who does take the phone in.
 - **Nutrition from photos:** each meal gets estimated protein, carbs, fat, fiber, calories, vegetable and fruit servings, and key nutrients (iron, calcium, vitamin C, B12, folate, potassium). "Fuel today" shows totals against your targets and what is still behind. Protein follows your weight and height (1.4 g per kg, capped at the healthy weight for your height); calories need birth year and sex, both optional. The meal type also follows the food itself, so a late breakfast stays breakfast.
 - **Animated how-to drawings** for every reset and the breathing practice (SVG, no video, works offline).
 - **Instant feedback:** quick feedback comes from rules on the phone. AI analysis runs in the background, so no screen ever waits on a model.
-- **Four rings (Gut, Fuel, Move, Rest)** fill only for actions you control. A forgiving streak means one missed day never breaks it.
+- **Four rings (Gut, Fuel, Move, Rest)** fill only for actions you control. A forgiving streak (the flame on Today; tap it for the rules) counts days with at least one meal or toilet visit logged, and one missed day never breaks it.
 - **A weekly habit ladder** adds one new gut habit and one movement or food habit at a time.
 - **A coach, not just a logger:**
   - **Ask Temple** answers the frequent questions in one tap ("Should I go?", "Why am I gassy?", "Why a rough morning?", "Feeling heavy", "Did I eat right?", "What for dinner?") or anything you type. An instant answer from rules appears at once; the AI answer, built from your own logs and notes, follows in about a second.
@@ -49,7 +50,7 @@ Everything runs on free plans: Vercel Hobby, Supabase Free, Cloudflare Workers A
 ## Deploy your own (about 15 minutes)
 
 1. **Supabase** (free): create a project, in the region nearest you.
-   - Open the SQL editor and run `supabase/migrations/0001_init.sql`, then `0002_coach.sql`, `0003_health_records.sql` and `0004_record_consent.sql`.
+   - Open the SQL editor and run `supabase/migrations/0001_init.sql`, then `0002_coach.sql`, `0003_health_records.sql`, `0004_record_consent.sql` and `0005_naps.sql`.
    - In the same editor, allow your email (this stays in your database, never in git): `insert into private.allowed_emails (email) values ('you@example.com');`
    - Under Authentication, then URL Configuration, set the Site URL to `https://<your-app>/login`.
    - Copy the project URL and anon key from Project Settings, then API.

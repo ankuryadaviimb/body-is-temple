@@ -1,17 +1,21 @@
 "use client";
 
-import { describeWhen, resolveWhen, timeOf, type WhenValue } from "@/lib/domain/when";
+import { describeWhen, readWhen, timeOf, type WhenValue } from "@/lib/domain/when";
 import { localParts } from "@/lib/domain/time";
 import { Choice } from "./sheet";
 
-/** Day (today or yesterday) and time, with quick "ago" shortcuts and a clear preview. */
+/**
+ * Day (today or yesterday) and time, starting at the phone's current time, with quick
+ * "ago" shortcuts and a clear preview. When a time is read differently from how it
+ * was set (later than now), the preview says so in plain words.
+ */
 export function WhenPicker({ value, onChange, tz }: { value: WhenValue; onChange: (v: WhenValue) => void; tz: string }) {
   const now = new Date();
-  const at = resolveWhen(value, tz, now);
+  const { at, reading } = readWhen(value, tz, now);
   const shortcut = (ago: number) => {
     const t = new Date(now.getTime() - ago * 60_000);
     const p = localParts(t, tz);
-    onChange({ day: p.date === localParts(now, tz).date ? "today" : "yesterday", time: timeOf(Math.floor(p.minutes / 5) * 5) });
+    onChange({ day: p.date === localParts(now, tz).date ? "today" : "yesterday", time: timeOf(ago === 0 ? p.minutes : Math.floor(p.minutes / 5) * 5) });
   };
   return (
     <div className="mb-5">
@@ -34,14 +38,17 @@ export function WhenPicker({ value, onChange, tz }: { value: WhenValue; onChange
         />
       </label>
       <div className="mt-2 flex flex-wrap gap-1.5">
-        {[30, 60, 120, 180].map((ago) => (
+        {[0, 30, 60, 120, 180].map((ago) => (
           <button key={ago} type="button" onClick={() => shortcut(ago)} className="pressable h-8 rounded-full bg-surface-2 px-3 text-[13px] font-medium text-ink-2">
-            {ago < 60 ? `${ago} min ago` : `${ago / 60} h ago`}
+            {ago === 0 ? "Now" : ago < 60 ? `${ago} min ago` : `${ago / 60} h ago`}
           </button>
         ))}
       </div>
-      <p className="mt-2 text-[13px] text-ink-3">
-        Saves as <span className="font-semibold text-ink-2">{describeWhen(at, tz, now)}</span>
+      <p className={`mt-2 text-[13px] ${reading === "as_set" ? "text-ink-3" : "font-medium text-tip"}`} role={reading === "as_set" ? undefined : "status"}>
+        {reading === "now" ? "That time is a little later than now, so this saves as now: " : null}
+        {reading === "last_night" ? "That time has not come yet today, so this saves as yesterday: " : null}
+        {reading === "as_set" ? "Saves as " : null}
+        <span className="font-semibold text-ink-2">{describeWhen(at, tz, now)}</span>
       </p>
     </div>
   );

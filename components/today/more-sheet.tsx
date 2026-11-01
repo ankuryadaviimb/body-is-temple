@@ -6,7 +6,7 @@ import { logEvent } from "@/lib/client/log";
 import { Choice, Sheet } from "../sheet";
 import { useToast } from "../toast";
 
-type Panel = "menu" | "meal_text" | "weight" | "mood" | "stress" | "symptom" | "note" | "workout";
+type Panel = "menu" | "weight" | "mood" | "stress" | "symptom" | "note" | "workout";
 
 /** Less frequent logs. Every one is a tap or two; text is optional and short. */
 export function MoreSheet({ open, onClose, onEarlier }: { open: boolean; onClose: () => void; onEarlier?: () => void }) {
@@ -32,9 +32,7 @@ export function MoreSheet({ open, onClose, onEarlier }: { open: boolean; onClose
   }
 
   async function submit() {
-    if (panel === "meal_text" && text.trim()) {
-      logged(await logEvent("meal", { text: text.trim().slice(0, 500) }), "Meal saved. Details appear in a few seconds.");
-    } else if (panel === "weight" && Number(num) >= 25) {
+    if (panel === "weight" && Number(num) >= 25) {
       logged(await logEvent("weigh_in", { kg: Math.round(Number(num) * 10) / 10 }), "Weight saved.");
     } else if ((panel === "mood" || panel === "stress") && level) {
       logged(await logEvent(panel, { level }), "Saved.");
@@ -58,7 +56,6 @@ export function MoreSheet({ open, onClose, onEarlier }: { open: boolean; onClose
   const input = "h-12 w-full rounded-xl border border-line bg-surface-2 px-4 text-base";
   const titles: Record<Panel, string> = {
     menu: "Log something else",
-    meal_text: "Describe a meal",
     weight: "Weight",
     mood: "Mood",
     stress: "Stress",
@@ -81,7 +78,6 @@ export function MoreSheet({ open, onClose, onEarlier }: { open: boolean; onClose
           </Link>
           {(
             [
-              ["meal_text", "Meal by text"],
               ["workout", "Workout"],
               ["weight", "Weight"],
               ["mood", "Mood"],
@@ -103,13 +99,13 @@ export function MoreSheet({ open, onClose, onEarlier }: { open: boolean; onClose
         </div>
       ) : (
         <div className="flex flex-col gap-3">
-          {panel === "meal_text" || panel === "note" ? (
+          {panel === "note" ? (
             <textarea
               value={text}
               onChange={(e) => setText(e.target.value)}
-              maxLength={panel === "note" ? 1000 : 500}
+              maxLength={1000}
               rows={3}
-              placeholder={panel === "meal_text" ? "e.g. 2 roti, moong dal, curd" : "Anything worth remembering"}
+              placeholder="Anything worth remembering"
               className="rounded-xl border border-line bg-surface-2 p-4 text-base"
             />
           ) : null}

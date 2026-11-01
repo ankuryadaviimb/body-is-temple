@@ -91,10 +91,10 @@ export function RailButton({
   const inner = (
     <>
       <span className={`flex size-12 items-center justify-center rounded-full ${tint}`}>{icon}</span>
-      <span className="text-[11px] font-medium text-ink-2">{label}</span>
+      <span className="w-full truncate text-center text-[11px] font-medium text-ink-2">{label}</span>
     </>
   );
-  const cls = "pressable flex w-[50px] shrink-0 flex-col items-center gap-1.5";
+  const cls = "pressable flex min-w-0 flex-col items-center gap-1.5";
   return href ? (
     <Link href={href} className={cls}>
       {inner}

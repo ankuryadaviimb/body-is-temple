@@ -255,3 +255,52 @@ export const SeedsIcon = (p: IconProps) => (
     <path d="M10 11h.01M14 11h.01M12 14h.01M10 17h.01M14 17h.01" strokeWidth="2.6" />
   </Svg>
 );
+/** A crescent with a small "z": a daytime nap. */
+export const NapIcon = (p: IconProps) => (
+  <Svg {...p}>
+    <path d="M19 14.5A7.5 7.5 0 0 1 9.5 5a7.5 7.5 0 1 0 9.5 9.5z" />
+    <path d="M15 3h4l-4 4h4" />
+  </Svg>
+);
+/** A wrapped bar. */
+export const BarIcon = (p: IconProps) => (
+  <Svg {...p}>
+    <rect x="3" y="8" width="18" height="8" rx="2" />
+    <path d="M7 8v8M17 8v8M10 11h4M10 13h4" />
+  </Svg>
+);
+/** A banana. */
+export const FruitIcon = (p: IconProps) => (
+  <Svg {...p}>
+    <path d="M5 6c-1 6 2 12 9 13 3 .4 5-.6 6-2-6 0-11-4-12-11z" />
+    <path d="M5 6l-.5-2" />
+  </Svg>
+);
+/** A scoop of powder. */
+export const ScoopIcon = (p: IconProps) => (
+  <Svg {...p}>
+    <path d="M4 11h12a6 6 0 0 1-12 0z" />
+    <path d="M16 12l5-5" />
+    <path d="M7 8.5c1-1.5 5-1.5 6 0" />
+  </Svg>
+);
+/** A bowl. */
+export const BowlIcon = (p: IconProps) => (
+  <Svg {...p}>
+    <path d="M3 11h18a9 9 0 0 1-18 0z" />
+    <path d="M8 7c0-1.5 1-2 2-2M13 7c0-1.5 1-2 2-2" />
+  </Svg>
+);
+/** Nuts. */
+export const NutsIcon = (p: IconProps) => (
+  <Svg {...p}>
+    <ellipse cx="9" cy="13" rx="4" ry="5.5" transform="rotate(-25 9 13)" />
+    <ellipse cx="16" cy="10" rx="3.2" ry="4.5" transform="rotate(20 16 10)" />
+  </Svg>
+);
+/** An egg. */
+export const EggIcon = (p: IconProps) => (
+  <Svg {...p}>
+    <path d="M12 3c3.5 0 6.5 6 6.5 10.5a6.5 6.5 0 0 1-13 0C5.5 9 8.5 3 12 3z" />
+  </Svg>
+);

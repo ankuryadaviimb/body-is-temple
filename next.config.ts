@@ -18,6 +18,11 @@ const securityHeaders = [
 
 const nextConfig: NextConfig = {
   poweredByHeader: false,
+  experimental: {
+    // Fully prefetched screens (the tabs) stay ready for 30 minutes. They hold no data (each
+    // screen reads this phone's store and fetches its own data), so nothing goes stale.
+    staleTimes: { static: 1800 },
+  },
   turbopack: {
     root: process.cwd(),
     rules: {

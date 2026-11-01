@@ -70,7 +70,7 @@ export function ToiletSession({ back = false, going = false, earlier = false }: 
 function Flow({ back, earlier, openStartedAt }: { back: boolean; earlier: boolean; openStartedAt: string | null }) {
   const router = useRouter();
   const settings = useSettings();
-  const [when, setWhen] = useState<WhenValue>(() => defaultWhen(settings.tz, new Date(), 60));
+  const [when, setWhen] = useState<WhenValue>(() => defaultWhen(settings.tz));
   const today = useToday();
   const events = useDayEvents(today);
   const { logged, show } = useToast();

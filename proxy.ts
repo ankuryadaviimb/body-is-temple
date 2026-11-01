@@ -86,13 +86,7 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: [
-    {
-      source: "/((?!api|_next/static|_next/image|favicon.ico|icons|icon|apple-icon|splash|manifest.webmanifest|sw.js|robots.txt).*)",
-      missing: [
-        { type: "header", key: "next-router-prefetch" },
-        { type: "header", key: "purpose", value: "prefetch" },
-      ],
-    },
-  ],
+  // Prefetches go through here too: the tabs are prefetched, and a prefetch that arrives with
+  // an expired session must refresh it and save the new cookies, like any page request.
+  matcher: ["/((?!api|_next/static|_next/image|favicon.ico|icons|icon|apple-icon|splash|manifest.webmanifest|sw.js|robots.txt).*)"],
 };

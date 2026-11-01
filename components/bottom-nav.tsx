@@ -35,6 +35,10 @@ export function BottomNav() {
             <li key={href}>
               <Link
                 href={href}
+                // Tabs are prefetched in full as soon as the app opens, so a tap shows the
+                // screen at once instead of waiting on the server (slowest right after a
+                // quiet night, when the server has to start up).
+                prefetch
                 className={`pressable flex min-w-[72px] flex-col items-center gap-1 px-3 py-1 text-[11px] font-semibold ${active ? "text-brand" : "text-ink-3"}`}
                 aria-current={active ? "page" : undefined}
               >

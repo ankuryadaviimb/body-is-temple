@@ -1,11 +1,12 @@
 import "fake-indexeddb/auto";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { clearDevice, db, kvSet } from "@/lib/client/db";
-import { logEvent, removeEvent, updateEvent } from "@/lib/client/log";
+import { logEvent, logUsualFood, removeEvent, updateEvent } from "@/lib/client/log";
 import { mergeServerRange, resumeSync, retryFailed, stopSync, syncNow } from "@/lib/client/sync";
 import type { StoredEvent } from "@/lib/domain/events";
 import { logicalDayFor } from "@/lib/domain/logical-day";
 import { DEFAULT_SETTINGS } from "@/lib/domain/settings";
+import type { UsualFood } from "@/lib/domain/usual-foods";
 
 /**
  * The offline sync rules, replayed against a fake server that can hold a request "in
@@ -228,5 +229,41 @@ describe("offline sync", () => {
     expect(server.has(event.id)).toBe(false);
     expect((await db().outbox.toArray())[0]?.eventId).toBe(event.id);
     expect((await db().outbox.toArray())[0]?.failed).toBeFalsy();
+  });
+
+  it("logs a usual food with its label values at once, even offline", async () => {
+    const food: UsualFood = {
+      id: "test-scoop",
+      name: "Test plant protein",
+      label: "Test scoop",
+      serving: "1 scoop (30 g)",
+      icon: "scoop",
+      kcal: 120,
+      protein_g: 20,
+      carbs_g: 3,
+      fat_g: 2,
+      fiber_g: 1,
+      tags: ["packaged", "high_protein"],
+      nutrients: [],
+      fruit_servings: 0,
+      snack: true,
+    };
+    await kvSet("snapshot", { settings: { ...DEFAULT_SETTINGS, tz: TZ, usual_foods: [food] }, today: "2026-11-02", streak: {}, ladder: { index: 0, heldInWindow: 0, startedOn: null }, recentVisitCounts: [], fetchedAt: 0 });
+    setOnline(false);
+    const { event } = await logUsualFood(food);
+    const local = await db().events.get(event.id);
+    expect(local?.meta).toMatchObject({ ai_status: "done", analysis: { protein_g: { low: 20, high: 20 } } });
+    expect(local?.payload).toMatchObject({ usual: "test-scoop", slot: "snack" });
+    setOnline(true);
+    await settle();
+    expect(server.get(event.id)?.payload).toMatchObject({ usual: "test-scoop", slot: "snack", slot_chosen: true });
+  });
+
+  it("starts a nap, then saves its length on waking", async () => {
+    const { event } = await logEvent("nap", {});
+    await settle();
+    await updateEvent(event.id, { payload: { minutes: 40 } });
+    await settle();
+    expect(server.get(event.id)?.payload).toEqual({ minutes: 40 });
   });
 });

@@ -94,6 +94,10 @@ export function dayDigest(day: string, events: StoredEvent[], tz: string, label?
   }
   for (const n of ofKind(events, "note")) parts.push(`note: ${(payloadOf(n, "note")?.text ?? "").slice(0, 100)}`);
   for (const w of ofKind(events, "weigh_in")) parts.push(`weight ${payloadOf(w, "weigh_in")?.kg} kg`);
+  for (const n of ofKind(events, "nap")) {
+    const m = payloadOf(n, "nap")?.minutes;
+    parts.push(`nap at ${clock(n.occurred_at, tz)}${typeof m === "number" ? ` for ${m} min` : " (still napping or end not logged)"}`);
+  }
   const sleep = ofKind(events, "sleep").at(-1);
   if (sleep) parts.push(`bed ${clock(sleep.occurred_at, tz)}`);
 

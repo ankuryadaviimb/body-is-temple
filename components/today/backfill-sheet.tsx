@@ -1,24 +1,24 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useRef, useState } from "react";
+import { useState } from "react";
 import { useSettings } from "@/lib/client/hooks";
 import { logEvent } from "@/lib/client/log";
-import { prepareMealPhoto } from "@/lib/client/photo";
-import { MEAL_SLOTS, type MealSlot } from "@/lib/domain/events";
-import { addDays, localParts } from "@/lib/domain/time";
-import { defaultWhen, describeWhen, resolveWhen, timeOf, type WhenValue } from "@/lib/domain/when";
-import { CupIcon, DropIcon, DumbbellIcon, ImageIcon, LeafIcon, PlateIcon, SeatIcon, SeedsIcon, SpoonIcon, WalkIcon, WindIcon } from "../icons";
+import { durationLabel } from "@/lib/client/labels";
+import { defaultWhen, describeWhen, resolveWhen, type WhenValue } from "@/lib/domain/when";
+import { CupIcon, DropIcon, DumbbellIcon, LeafIcon, NapIcon, PlateIcon, SeatIcon, SeedsIcon, SpoonIcon, WalkIcon, WindIcon } from "../icons";
 import { Choice, Sheet } from "../sheet";
 import { useToast } from "../toast";
 import { WhenPicker } from "../when-picker";
+import { MealComposer } from "./meal-composer";
 
 /**
  * "Add an earlier entry": anything you could not log in the moment, at the time it
- * happened, today or yesterday. Meals can be typed, with an optional photo.
+ * happened, today or yesterday. The time starts at now. Meals use the same form as the
+ * Meal tile (type, photos, usual foods).
  */
 
-type Kind = "meal" | "toilet" | "water" | "tea" | "amla" | "chia" | "isabgol" | "walk" | "gas" | "workout";
+type Kind = "meal" | "toilet" | "water" | "tea" | "amla" | "chia" | "isabgol" | "walk" | "nap" | "gas" | "workout";
 
 const KINDS: { kind: Kind; label: string; Icon: typeof PlateIcon; tint: string }[] = [
   { kind: "meal", label: "Meal", Icon: PlateIcon, tint: "bg-fuel/15 text-fuel" },
@@ -29,11 +29,10 @@ const KINDS: { kind: Kind; label: string; Icon: typeof PlateIcon; tint: string }
   { kind: "chia", label: "Chia water", Icon: SeedsIcon, tint: "bg-rest/15 text-rest" },
   { kind: "isabgol", label: "Isabgol", Icon: SpoonIcon, tint: "bg-gut/15 text-gut" },
   { kind: "walk", label: "Walk", Icon: WalkIcon, tint: "bg-move/15 text-move" },
+  { kind: "nap", label: "Nap", Icon: NapIcon, tint: "bg-rest/15 text-rest" },
   { kind: "gas", label: "Gas", Icon: WindIcon, tint: "bg-surface-3 text-ink-2" },
   { kind: "workout", label: "Workout", Icon: DumbbellIcon, tint: "bg-move/15 text-move" },
 ];
-
-const SLOT_LABEL: Record<MealSlot, string> = { breakfast: "Breakfast", lunch: "Lunch", snack: "Snack", dinner: "Dinner", late: "Late" };
 
 export function BackfillSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
   if (!open) return null;
@@ -43,14 +42,11 @@ export function BackfillSheet({ open, onClose }: { open: boolean; onClose: () =>
 function Backfill({ onClose }: { onClose: () => void }) {
   const router = useRouter();
   const settings = useSettings();
-  const { logged: notify, show } = useToast();
+  const { logged: notify } = useToast();
   const logged = (result: Parameters<typeof notify>[0], text: string) => notify({ ...result, feedback: null }, text);
-  const photoInput = useRef<HTMLInputElement>(null);
   const [kind, setKind] = useState<Kind | null>(null);
   const [when, setWhen] = useState<WhenValue>(() => defaultWhen(settings.tz));
   const [text, setText] = useState("");
-  const [slot, setSlot] = useState<MealSlot | "auto">("auto");
-  const [photo, setPhoto] = useState<Blob | null>(null);
   const [count, setCount] = useState(1);
   const [size, setSize] = useState<number | null>(null);
   const [tsp, setTsp] = useState(1);
@@ -70,31 +66,12 @@ function Backfill({ onClose }: { onClose: () => void }) {
     setCount(1);
     setSize(null);
     setText("");
-    setMinutes(k === "workout" ? 45 : 10);
+    setMinutes(k === "workout" ? 45 : k === "nap" ? 30 : 10);
     setKind(k);
   }
 
-  async function onPhoto(files: FileList | null) {
-    const file = files?.[0];
-    if (!file) return;
-    try {
-      const { blob, takenAt } = await prepareMealPhoto(file, false);
-      setPhoto(blob);
-      // A photo's own time is the best guess for when the meal happened, when that is today
-      // or yesterday (the days an earlier entry can go on). An older photo keeps the time set here.
-      if (takenAt) {
-        const p = localParts(takenAt, settings.tz);
-        const today = localParts(new Date(), settings.tz).date;
-        if (p.date === today || p.date === addDays(today, -1)) setWhen({ day: p.date === today ? "today" : "yesterday", time: timeOf(p.minutes) });
-        else show("This photo is from an earlier day, so its time was not used. Pick the time below.", "tip");
-      }
-    } catch {
-      show("Could not read that photo. Try another one, or just type the meal.", "tip");
-    }
-  }
-
   const ready =
-    kind === "meal" ? text.trim().length > 0 || photo !== null : kind === "gas" ? gas !== undefined : kind === "workout" ? text.trim().length > 0 && minutes > 0 : kind !== null;
+    kind === "meal" ? false : kind === "gas" ? gas !== undefined : kind === "workout" ? text.trim().length > 0 && minutes > 0 : kind !== null;
 
   async function save() {
     if (!kind || !ready) return;
@@ -102,13 +79,7 @@ function Backfill({ onClose }: { onClose: () => void }) {
     const at = resolveWhen(when, settings.tz);
     const label = describeWhen(at, settings.tz);
     try {
-      if (kind === "meal") {
-        const payload = {
-          ...(text.trim() ? { text: text.trim().slice(0, 500) } : {}),
-          ...(slot !== "auto" ? { slot, slot_chosen: true } : {}),
-        };
-        logged(await logEvent("meal", payload, { at, ...(photo ? { photo } : {}) }), `Meal saved for ${label}. Details appear in a few seconds.`);
-      } else if (kind === "water") {
+      if (kind === "water") {
         logged(await logEvent("water", { ml: Math.min(2000, count * glass) }, { at }), `Water ${count * glass} ml saved for ${label}.`);
       } else if (kind === "tea") {
         logged(await logEvent("drink", { type: "tea", ml: Math.min(2000, count * cup) }, { at }), `Tea saved for ${label}.`);
@@ -118,6 +89,8 @@ function Backfill({ onClose }: { onClose: () => void }) {
         logged(await logEvent("isabgol", { tsp, water_ml: 200 }, { at }), `Isabgol saved for ${label}.`);
       } else if (kind === "walk") {
         logged(await logEvent("walk", { minutes }, { at }), `Walk saved for ${label}.`);
+      } else if (kind === "nap") {
+        logged(await logEvent("nap", { minutes }, { at }), `Nap of ${durationLabel(minutes)} saved for ${label}.`);
       } else if (kind === "gas" && gas !== undefined) {
         logged(await logEvent("gas", { level: gas }, { at }), `Gas ${gas} of 4 saved for ${label}.`);
       } else if (kind === "workout") {
@@ -135,7 +108,7 @@ function Backfill({ onClose }: { onClose: () => void }) {
     <Sheet open title={title} onClose={onClose}>
       {!kind ? (
         <>
-          <p className="mb-4 text-[14px] leading-relaxed text-ink-2">Missed logging something? Pick it, then set the time it happened, today or yesterday.</p>
+          <p className="mb-4 text-[14px] leading-relaxed text-ink-2">Missed logging something? Pick it. The time starts at now; change it to when it happened, today or yesterday. For a nap, set when it started.</p>
           <div className="grid grid-cols-2 gap-2">
             {KINDS.map(({ kind: k, label, Icon, tint }) => (
               <button key={k} type="button" onClick={() => pick(k)} className="pressable flex h-14 items-center gap-2.5 rounded-2xl bg-surface-2 px-3 text-left text-[15px] font-semibold">
@@ -147,39 +120,16 @@ function Backfill({ onClose }: { onClose: () => void }) {
             ))}
           </div>
         </>
+      ) : kind === "meal" ? (
+        <div>
+          <button type="button" onClick={() => setKind(null)} className="pressable mb-3 h-8 text-[14px] font-semibold text-brand">
+            Back to the list
+          </button>
+          <MealComposer earlier onDone={onClose} />
+        </div>
       ) : (
         <div>
           <WhenPicker value={when} onChange={setWhen} tz={settings.tz} />
-
-          {kind === "meal" ? (
-            <>
-              <label className="mb-4 block">
-                <span className="mb-2 block text-[13px] font-semibold uppercase tracking-wide text-ink-3">What did you eat?</span>
-                <textarea
-                  value={text}
-                  onChange={(e) => setText(e.target.value)}
-                  maxLength={500}
-                  rows={3}
-                  placeholder="e.g. 2 roti, moong dal, curd"
-                  className="w-full rounded-2xl bg-surface-2 p-4 text-[16px] leading-relaxed outline-none"
-                />
-              </label>
-              <button
-                type="button"
-                onClick={() => photoInput.current?.click()}
-                className="pressable mb-5 flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-surface-2 text-[15px] font-semibold text-brand"
-              >
-                <ImageIcon className="size-5" /> {photo ? "Photo added, tap to change" : "Add a photo (optional)"}
-              </button>
-              <input ref={photoInput} type="file" accept="image/*" className="hidden" onChange={(e) => void onPhoto(e.target.files)} />
-              <Choice
-                label="Meal"
-                value={slot}
-                onChange={setSlot}
-                options={[{ value: "auto" as const, label: "Auto" }, ...MEAL_SLOTS.map((s) => ({ value: s, label: SLOT_LABEL[s] }))]}
-              />
-            </>
-          ) : null}
 
           {kind === "water" || kind === "amla" || kind === "chia" ? (
             <>
@@ -197,6 +147,10 @@ function Backfill({ onClose }: { onClose: () => void }) {
 
           {kind === "isabgol" ? (
             <Choice label="Teaspoons" value={tsp} onChange={setTsp} options={[0.5, 1, 1.5, 2].map((v) => ({ value: v, label: String(v) }))} />
+          ) : null}
+
+          {kind === "nap" ? (
+            <Choice label="How long did you sleep?" value={minutes} onChange={setMinutes} options={[15, 20, 30, 45, 60, 90, 120].map((v) => ({ value: v, label: durationLabel(v) }))} />
           ) : null}
 
           {kind === "walk" ? (

@@ -4,16 +4,17 @@ import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { apiSend } from "@/lib/client/api";
 import { useDayEvents, useSettings, useSnapshot, useSyncState, useToday } from "@/lib/client/hooks";
-import { timeLabel } from "@/lib/client/labels";
-import { dayEvents, logEvent, updateEvent } from "@/lib/client/log";
+import { durationLabel, timeLabel } from "@/lib/client/labels";
+import { dayEvents, logEvent, logUsualFood, updateEvent } from "@/lib/client/log";
 import { usePendingDeletes } from "@/lib/client/pending-delete";
 import { refreshFromServer, retryFailed } from "@/lib/client/sync";
 import { useOpenVisit } from "@/lib/client/toilet-visit";
-import { mainMeals, ofKind, waterMl } from "@/lib/domain/day";
+import { mainMeals, napMinutesUntil, ofKind, openNap, waterMl } from "@/lib/domain/day";
 import { mealAnalysisOf, payloadOf } from "@/lib/domain/events";
 import { buildMorningCard, LADDER } from "@/lib/domain/ladder";
 import { computeRings } from "@/lib/domain/rings";
 import { nextUp } from "@/lib/domain/next-up";
+import { isOnTrack } from "@/lib/domain/streak";
 import { feedbackFor } from "@/lib/domain/rules-feedback";
 import { addDays, localParts, minutesBetween } from "@/lib/domain/time";
 import {
@@ -26,6 +27,7 @@ import {
   FlameIcon,
   LeafIcon,
   MoonIcon,
+  NapIcon,
   SeatIcon,
   SpoonIcon,
   SunIcon,
@@ -43,6 +45,9 @@ import { BackfillSheet } from "./backfill-sheet";
 import { CoachCardView } from "./coach-card";
 import { FuelCard } from "./fuel-card";
 import { MealTile } from "./meal-button";
+import { UsualFoodGrid } from "./meal-composer";
+import { NapCard } from "./nap-card";
+import { StreakSheet } from "./streak-sheet";
 import { MorningCardView } from "./morning-card";
 import { MoreSheet } from "./more-sheet";
 import { BackFromToiletCard, NextUpCard } from "./next-up-card";
@@ -91,7 +96,7 @@ export function TodayScreen() {
   const rawEvents = useDayEvents(today);
   const yesterdayEvents = useDayEvents(today ? addDays(today, -1) : undefined);
   const pendingDeletes = usePendingDeletes();
-  const { showFeedback, logged } = useToast();
+  const { showFeedback, logged, show } = useToast();
   const [moreOpen, setMoreOpen] = useState(false);
   const [gasOpen, setGasOpen] = useState(false);
   const [teaOpen, setTeaOpen] = useState(false);
@@ -99,6 +104,7 @@ export function TodayScreen() {
   const [earlierOpen, setEarlierOpen] = useState(false);
   const [moodFor, setMoodFor] = useState<string | null>(null);
   const [triageOpen, setTriageOpen] = useState(false);
+  const [streakOpen, setStreakOpen] = useState(false);
   const openVisit = useOpenVisit();
 
   const events = useMemo(() => rawEvents?.filter((e) => !pendingDeletes.has(e.id)), [rawEvents, pendingDeletes]);
@@ -161,6 +167,17 @@ export function TodayScreen() {
   const lastVisit = visits.at(-1);
   const water = waterMl(events);
   const teas = ofKind(events, "drink").filter((e) => payloadOf(e, "drink")?.type === "tea");
+  const nap = openNap(events, new Date());
+
+  async function napTap() {
+    if (nap) {
+      const minutes = napMinutesUntil(nap, new Date());
+      await updateEvent(nap.id, { payload: { minutes } });
+      show(`Nap saved: ${durationLabel(minutes)}.`, "good");
+      return;
+    }
+    logged(await logEvent("nap", {}), "Nap started. Tap \u201cI'm up\u201d when you wake.");
+  }
 
   async function quickLog(kind: "water" | "tea" | "isabgol" | "amla" | "chia" | "walk", sizeMl?: number) {
     const glass = sizeMl ?? settings.water_glass_ml;
@@ -230,13 +247,15 @@ export function TodayScreen() {
               {sync.online ? `${sync.pending} to sync` : "Offline"}
             </span>
           ) : null}
-          <span
-            className={`flex h-8 items-center gap-1 rounded-full px-3 text-sm font-semibold shadow-card ${streak && streak.count > 0 ? "bg-fuel/15 text-fuel" : "bg-surface text-ink-3"}`}
-            title="Days on track"
+          <button
+            type="button"
+            onClick={() => setStreakOpen(true)}
+            className={`pressable flex h-8 items-center gap-1 rounded-full px-3 text-sm font-semibold shadow-card ${streak && streak.count > 0 ? "bg-fuel/15 text-fuel" : "bg-surface text-ink-3"}`}
+            aria-label={`Streak: ${streak?.count ?? 0} ${streak?.count === 1 ? "day" : "days"} on track. Tap to learn more.`}
           >
             <FlameIcon className="size-4" />
-            {streak?.count ?? 0}
-          </span>
+            {streak?.count ?? 0} {streak?.count === 1 ? "day" : "days"}
+          </button>
         </div>
       </header>
 
@@ -282,6 +301,8 @@ export function TodayScreen() {
 
       <RingsHero rings={rings} />
 
+      {nap ? <NapCard nap={nap} tz={settings.tz} /> : null}
+
       {openVisit ? <BackFromToiletCard startedAt={openVisit.startedAt} now={new Date()} /> : nudge ? <NextUpCard nudge={nudge} /> : null}
 
       {coachCard && morning ? <CoachCardView card={coachCard} /> : null}
@@ -299,7 +320,7 @@ export function TodayScreen() {
             sub={
               meals.length > 0
                 ? `${meals.length} ${meals.length === 1 ? "meal" : "meals"}${lastMeal ? ` · last ${timeLabel(lastMeal, settings.tz)}` : ""}`
-                : "Snap your first meal"
+                : "Type it, snap it, or tap a usual"
             }
           />
           <Tile
@@ -340,14 +361,22 @@ export function TodayScreen() {
           />
         </div>
 
-        <div className="no-scrollbar mt-4 flex justify-between gap-1 overflow-x-auto pb-1">
+        <div className="mt-5 grid grid-cols-4 gap-x-2 gap-y-4">
           <RailButton onClick={() => void quickLog("isabgol")} icon={<SpoonIcon className="size-6" />} tint="bg-gut/15 text-gut" label="Isabgol" />
           <RailButton onClick={() => void quickLog("amla")} icon={<LeafIcon className="size-6" />} tint="bg-move/15 text-move" label="Amla" />
           <RailButton onClick={() => void quickLog("chia")} icon={<SeedsIcon className="size-6" />} tint="bg-rest/15 text-rest" label="Chia" />
           <RailButton onClick={() => void quickLog("walk")} icon={<WalkIcon className="size-6" />} tint="bg-move/15 text-move" label="Walk" />
+          <RailButton onClick={() => void napTap()} icon={<NapIcon className="size-6" />} tint={nap ? "bg-rest text-white" : "bg-rest/15 text-rest"} label={nap ? "I'm up" : "Nap"} />
           <RailButton href="/practice" icon={<FeatherIcon className="size-6" />} tint="bg-gut/15 text-gut" label="Breathe" />
           <RailButton onClick={() => setGasOpen(true)} icon={<WindIcon className="size-6" />} tint="bg-surface text-ink-2 shadow-card" label="Gas" />
           <RailButton onClick={() => setMoreOpen(true)} icon={<DotsIcon className="size-6" />} tint="bg-surface text-ink-2 shadow-card" label="More" />
+        </div>
+
+        <div className="mt-6">
+          <UsualFoodGrid
+            foods={settings.usual_foods}
+            onTap={async (food) => logged(await logUsualFood(food), `${food.label} logged · ${Math.round(food.protein_g)} g protein`)}
+          />
         </div>
       </section>
 
@@ -419,6 +448,7 @@ export function TodayScreen() {
       <BackfillSheet open={earlierOpen} onClose={() => setEarlierOpen(false)} />
       <GasSheet open={gasOpen} onClose={() => setGasOpen(false)} />
       <TriageSheet open={triageOpen} onClose={() => setTriageOpen(false)} />
+      <StreakSheet open={streakOpen} onClose={() => setStreakOpen(false)} streak={streak ?? null} todayCounts={isOnTrack(events)} />
       <Sheet open={glassOpen} title="Which glass?" onClose={() => setGlassOpen(false)}>
         <p className="mb-4 text-sm leading-relaxed text-ink-2">Logs this glass now and makes it your usual, for water, amla and chia water.</p>
         <div className="flex flex-col gap-2">

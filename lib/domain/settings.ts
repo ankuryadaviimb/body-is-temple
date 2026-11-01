@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { DEFAULT_DAY_START_HOUR } from "./logical-day";
 import { DEFAULT_TZ, isValidTimeZone } from "./time";
+import { UsualFoods } from "./usual-foods";
 
 /** User settings and targets. Stored as one JSON document per user. */
 export const SettingsSchema = z.strictObject({
@@ -37,6 +38,8 @@ export const SettingsSchema = z.strictObject({
       }),
     )
     .max(21),
+  /** One-tap foods with known values (a packaged label or a fixed portion). */
+  usual_foods: UsualFoods,
   /** Hard cap on push notifications per day (used from M2). */
   max_pushes_per_day: z.int().min(0).max(8),
   quiet_start_min: z.int().min(0).max(1439),
@@ -64,6 +67,7 @@ export const DEFAULT_SETTINGS: Settings = {
   birth_year: null,
   sex: null,
   classes: [],
+  usual_foods: [],
   max_pushes_per_day: 4,
   quiet_start_min: 23 * 60 + 30,
   quiet_end_min: 7 * 60,

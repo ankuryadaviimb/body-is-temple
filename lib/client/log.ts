@@ -8,6 +8,7 @@ import { feedbackFor, type Feedback } from "@/lib/domain/rules-feedback";
 import { withDefaults, type Settings } from "@/lib/domain/settings";
 import type { CachedSnapshot } from "@/lib/domain/snapshot";
 import { addDays, localParts } from "@/lib/domain/time";
+import { findUsual, usualMealMeta, type UsualFood, usualMealPayload } from "@/lib/domain/usual-foods";
 import { apiSend } from "./api";
 import { db, kvGet, mayBeOnServer, type LocalEvent, type OutboxOp } from "./db";
 import { deviceSettings } from "./device";
@@ -80,7 +81,9 @@ export async function logEvent<K extends EventKind>(
     const slot = (payload as Payload<"meal">).slot ?? inferMealSlot(occurred_at, earlier, settings.tz, undefined, wakeAt);
     finalPayload = { ...finalPayload, slot };
     const hasText = typeof finalPayload.text === "string" && (finalPayload.text as string).length > 0;
-    meta = { ai_status: opts.photo || hasText ? "pending" : "skipped" };
+    // Same rule as the server: a usual food shows its label values at once, even offline.
+    const usual = opts.photo ? null : findUsual(settings.usual_foods, finalPayload.usual);
+    meta = usual ? usualMealMeta(usual) : { ai_status: opts.photo || hasText ? "pending" : "skipped" };
   }
 
   const input = ClientEventInput.parse({ id, kind, occurred_at, payload: finalPayload });
@@ -119,6 +122,11 @@ export async function logEvent<K extends EventKind>(
 
   const feedback = feedbackFor(local, await dayEvents(logical_day), { settings, ladderStep: await ladderStepId() });
   return { event: local, feedback };
+}
+
+/** One tap on a usual food: a meal with its known values. */
+export async function logUsualFood(food: UsualFood, at?: Date): Promise<LogResult> {
+  return logEvent("meal", usualMealPayload(food), at ? { at } : {});
 }
 
 /**

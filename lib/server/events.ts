@@ -8,6 +8,7 @@ import {
   type MealSlot,
   type StoredEvent,
 } from "@/lib/domain/events";
+import { findUsual, usualMealMeta } from "@/lib/domain/usual-foods";
 import { affectedCalendarDate, logicalDayFor, type Anchor } from "@/lib/domain/logical-day";
 import type { Settings } from "@/lib/domain/settings";
 import { addDays, localParts, localToInstant } from "@/lib/domain/time";
@@ -97,7 +98,9 @@ export async function insertEvents(
       const slot = input.payload.slot ?? inferMealSlot(input.occurred_at, earlier, tz);
       payload = { ...payload, slot };
       slotMap.set(day, [...(slotMap.get(day) ?? []), { at: input.occurred_at, slot }]);
-      meta = { ai_status: input.payload.media_id || input.payload.text ? "pending" : "skipped" };
+      // A usual food carries its label values, so it is done at once with no AI call.
+      const usual = input.payload.media_id ? null : findUsual(settings.usual_foods, input.payload.usual);
+      meta = usual ? usualMealMeta(usual) : { ai_status: input.payload.media_id || input.payload.text ? "pending" : "skipped" };
     }
     return {
       id: input.id,
